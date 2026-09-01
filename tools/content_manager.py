@@ -1,9 +1,4 @@
-"""Friendly local desktop UI for adding works and articles.
-
-The application uses Tkinter from Python's standard library. It writes the
-same JSON records as ``add_content.py``, rebuilds the static site, and can run a
-local preview server. No web backend or database is involved.
-"""
+"""Friendly local desktop UI for content, image optimization, and preview."""
 
 from __future__ import annotations
 
@@ -21,10 +16,10 @@ from tkinter import ttk
 
 import add_content
 import build_site
+from image_pipeline import SUPPORTED_EXTENSIONS
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SUPPORTED_IMAGES = {".webp", ".jpg", ".jpeg", ".png", ".gif", ".avif"}
 CATEGORY_LABELS = {
     "創作筆記": "painting-notes",
     "藝術評論": "art-criticism",
@@ -124,7 +119,7 @@ class FormFields:
         self.row += 1
         ttk.Label(
             self.parent,
-            text="支援 WebP、JPG、PNG、GIF、AVIF；建議圖片寬度 1600–2400 px。",
+            text="支援 WebP、JPG、PNG、AVIF；儲存時會自動產生手機與桌面尺寸。",
             style="Hint.TLabel",
         ).grid(row=self.row, column=1, columnspan=2, sticky="w", pady=(0, 8))
         self.row += 1
@@ -361,11 +356,11 @@ class MaintenancePanel(ttk.Frame):
         ttk.Label(self, text="網站維護", style="FormTitle.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
             self,
-            text="不需要指令列：可以在這裡重建網站、預覽結果或打開資料夾。",
+            text="在這裡重新最佳化所有圖片、產生網站、預覽結果或打開資料夾。",
             style="Hint.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(6, 24))
         actions = [
-            ("重新產生網站", app.rebuild, "將現有資料重新整理成 HTML。"),
+            ("最佳化圖片並重建網站", app.rebuild, "重新產生各種圖片尺寸與所有 HTML。"),
             ("開啟網站預覽", app.open_preview, "在瀏覽器查看目前網站。"),
             ("打開作品資料夾", lambda: open_folder(ROOT / "content" / "works"), "查看作品 JSON 資料。"),
             ("打開文章資料夾", lambda: open_folder(ROOT / "content" / "articles"), "查看文章 JSON 資料。"),
@@ -398,7 +393,7 @@ class ContentManager(Tk):
         ttk.Label(header, text="沈東榮網站內容管理器", style="AppTitle.TLabel").pack(anchor="w")
         ttk.Label(
             header,
-            text="新增作品與文章・更新靜態網站・本機預覽",
+            text="新增作品與文章・自動最佳化圖片・更新網站・本機預覽",
             style="AppSubtitle.TLabel",
         ).pack(anchor="w", pady=(5, 0))
 
@@ -434,23 +429,28 @@ class ContentManager(Tk):
 
     def rebuild(self) -> None:
         try:
-            build_site.build()
+            report = build_site.build()
         except Exception as error:  # noqa: BLE001 - UI must surface all build errors
             messagebox.showerror("建置失敗", str(error))
             self.status.set("網站建置失敗")
             return
-        self.status.set(f"網站已更新・{datetime.now():%H:%M:%S}")
-        messagebox.showinfo("完成", "網站已重新產生。")
+        summary = build_summary(report)
+        self.status.set(f"{summary}・{datetime.now():%H:%M:%S}")
+        messagebox.showinfo("完成", f"網站已重新產生。\n\n{summary}")
 
     def finish_save(self, label: str) -> None:
         try:
-            build_site.build()
+            report = build_site.build()
         except Exception as error:  # noqa: BLE001
             messagebox.showerror("資料已儲存，但網站建置失敗", str(error))
             self.status.set("內容已儲存・網站建置失敗")
             return
-        self.status.set(f"{label}已儲存・網站已更新")
-        if messagebox.askyesno("新增完成", f"{label}已儲存並更新網站。\n\n要立即開啟預覽嗎？"):
+        summary = build_summary(report)
+        self.status.set(f"{label}已儲存・{summary}")
+        if messagebox.askyesno(
+            "新增完成",
+            f"{label}已儲存，圖片已最佳化並更新網站。\n\n{summary}\n\n要立即開啟預覽嗎？",
+        ):
             self.open_preview()
 
     def open_preview(self) -> None:
@@ -485,13 +485,20 @@ def generated_slug(prefix: str) -> str:
     return f"{prefix}-{datetime.now():%Y%m%d-%H%M%S}"
 
 
+def build_summary(report: build_site.BuildReport) -> str:
+    return (
+        f"{report.page_count} 個頁面・"
+        f"{report.images.source_count} 張原圖產生 {report.images.variant_count} 個響應式版本"
+    )
+
+
 def valid_image(value: str) -> bool:
     path = Path(value).expanduser()
     suffix = path.suffix.lower() if path.suffix else Path(value).suffix.lower()
-    if suffix not in SUPPORTED_IMAGES:
+    if suffix not in SUPPORTED_EXTENSIONS:
         messagebox.showerror(
             "圖片格式不支援",
-            "請使用 WebP、JPG、PNG、GIF 或 AVIF。TIFF、PSD 等格式請先另存成網站圖片。",
+            "請使用 WebP、JPG、PNG 或 AVIF。GIF、TIFF、PSD 請先另存成靜態網站圖片。",
         )
         return False
     return True

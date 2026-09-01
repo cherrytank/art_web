@@ -15,6 +15,8 @@ class PageParser(HTMLParser):
         super().__init__()
         self.links: list[str] = []
         self.images_without_alt = 0
+        self.images_without_dimensions = 0
+        self.images_without_responsive_sources = 0
         self.h1_count = 0
         self.title_depth = 0
         self.title_text = ""
@@ -27,8 +29,17 @@ class PageParser(HTMLParser):
             self.links.append(values["src"] or "")
         elif tag == "link" and values.get("href"):
             self.links.append(values["href"] or "")
-        if tag == "img" and not (values.get("alt") or "").strip():
-            self.images_without_alt += 1
+        if tag == "img":
+            if not (values.get("alt") or "").strip():
+                self.images_without_alt += 1
+            if not values.get("width") or not values.get("height"):
+                self.images_without_dimensions += 1
+            if not values.get("srcset") or not values.get("sizes"):
+                self.images_without_responsive_sources += 1
+            for candidate in (values.get("srcset") or "").split(","):
+                url = candidate.strip().split(" ", 1)[0]
+                if url:
+                    self.links.append(url)
         if tag == "h1":
             self.h1_count += 1
         if tag == "title":
@@ -74,6 +85,10 @@ def main() -> None:
             errors.append(f"{page}: expected one h1, found {parser.h1_count}")
         if parser.images_without_alt:
             errors.append(f"{page}: {parser.images_without_alt} image(s) missing alt text")
+        if parser.images_without_dimensions:
+            errors.append(f"{page}: {parser.images_without_dimensions} image(s) missing width/height")
+        if parser.images_without_responsive_sources:
+            errors.append(f"{page}: {parser.images_without_responsive_sources} image(s) missing srcset/sizes")
         for link in parser.links:
             target = local_target(page, link)
             if target is None:
@@ -89,7 +104,10 @@ def main() -> None:
     if errors:
         print("\n".join(errors), file=sys.stderr)
         raise SystemExit(1)
-    print(f"Validated {len(pages)} HTML pages: links, assets, titles, h1, and alt text are valid.")
+    print(
+        f"Validated {len(pages)} HTML pages: links, responsive images, dimensions, "
+        "titles, h1, and alt text are valid."
+    )
 
 
 if __name__ == "__main__":

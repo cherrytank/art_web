@@ -304,6 +304,10 @@ a { color: inherit; }
 }
 
 @media (max-width: 760px) {
+  .page-home .hero-copy > * { animation-duration: .55s; animation-delay: .08s; }
+  .page-home .hero-portrait img { animation-duration: .68s; animation-delay: .08s; }
+  .page-home .portrait-caption { animation-duration: .55s; animation-delay: .18s; }
+  .js .reveal { transform: translateY(18px); transition-duration: .48s; }
   .site-header { border-left: 0; border-right: 0; }
   .site-nav { grid-template-columns: 1fr; max-height: calc(100svh - 90px); overflow: auto; }
   .home-hero { grid-template-columns: 1fr; border-left: 0; border-right: 0; }

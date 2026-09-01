@@ -10,6 +10,7 @@ from datetime import date
 from pathlib import Path
 
 import build_site
+from image_pipeline import SUPPORTED_EXTENSIONS
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,6 +40,9 @@ def validate_slug(slug: str) -> str:
 def prepare_image(value: str) -> str:
     source = Path(value).expanduser()
     if source.is_file():
+        if source.suffix.lower() not in SUPPORTED_EXTENSIONS:
+            choices = ", ".join(sorted(SUPPORTED_EXTENSIONS))
+            raise SystemExit(f"圖片格式不支援，請使用：{choices}")
         ASSET_DIR.mkdir(parents=True, exist_ok=True)
         target = ASSET_DIR / source.name
         if source.resolve() != target.resolve():
@@ -47,6 +51,9 @@ def prepare_image(value: str) -> str:
     existing = ASSET_DIR / value
     if not existing.is_file():
         raise SystemExit(f"找不到圖片：{value}\n請提供完整路徑，或先將圖片放進 {ASSET_DIR}")
+    if existing.suffix.lower() not in SUPPORTED_EXTENSIONS:
+        choices = ", ".join(sorted(SUPPORTED_EXTENSIONS))
+        raise SystemExit(f"圖片格式不支援，請使用：{choices}")
     return existing.name
 
 
@@ -162,7 +169,7 @@ def create_parser() -> argparse.ArgumentParser:
     work.add_argument("--description")
     work.add_argument("--featured", action="store_true")
 
-    subparsers.add_parser("build", help="只重建 HTML")
+    subparsers.add_parser("build", help="最佳化所有圖片並重建 HTML")
     return parser
 
 

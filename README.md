@@ -4,23 +4,29 @@
 
 ## 最簡單的操作方式：內容管理視窗
 
-Windows 使用者可直接雙擊根目錄的：
+第一次使用先安裝圖片處理套件：
 
-```text
-啟動內容管理器.bat
+```powershell
+python -m pip install -r requirements.txt
 ```
 
-開啟後有三個分頁：
+之後直接用 Python 開啟管理介面：
+
+```powershell
+python tools/content_manager.py
+```
+
+管理介面有三個分頁：
 
 - **新增作品**：填寫作品名稱、年份、媒材、尺寸與說明，並用按鈕選擇圖片。
 - **新增文章**：填寫標題、分類、摘要與正文；段落之間空一行即可。
-- **網站維護**：重新產生網站、開啟本機預覽，或打開作品、文章與圖片資料夾。
+- **網站維護**：重新最佳化全部圖片、產生網站、開啟本機預覽，或打開資料夾。
 
-按下「儲存並更新網站」後，程式會自動複製圖片、建立固定格式資料、更新列表與詳細頁。使用者不需要接觸 HTML 或指令列。
+按下「儲存並更新網站」後，程式會自動複製原圖、產生手機與桌面圖片、建立固定格式資料，並更新列表與詳細頁。使用者不需要接觸 HTML。
 
 ## 本機預覽
 
-需要 Python 3.10 以上，不需安裝第三方套件。
+需要 Python 3.10 以上，並先安裝 `requirements.txt` 內的套件。
 
 ```powershell
 python tools/serve.py
@@ -28,7 +34,7 @@ python tools/serve.py
 
 瀏覽器開啟 `http://127.0.0.1:8000/`。停止預覽請按 `Ctrl+C`。
 
-只重建 HTML：
+重新最佳化全部圖片並重建 HTML：
 
 ```powershell
 python tools/build_site.py
@@ -46,7 +52,23 @@ python tools/add_content.py work
 
 程式會詢問網址代稱、作品名稱、年份、圖片、媒材、尺寸與說明，完成後建立 `content/works/<slug>.json`，並自動重建作品列表與詳細頁。
 
-圖片可以輸入完整路徑，程式會複製到 `static/assets/images/`；也可以先自行將圖片放入該資料夾，再輸入檔名。建議使用 `.webp` 或經過壓縮的 `.jpg`。
+圖片可以輸入完整路徑，程式會複製到 `static/assets/images/`；也可以先自行將圖片放入該資料夾，再輸入檔名。支援 WebP、JPG、PNG 與 AVIF，原圖可以保留較高解析度，建置流程會自動產生適合網站傳輸的版本。
+
+## 圖片最佳化流程
+
+不論使用 GUI、`add_content.py`、`build_site.py` 或 GitHub Pages 部署，都會執行同一套流程：
+
+- 為每張圖片產生最接近 `480`、`800`、`1200`、`1800` 像素的 WebP 版本，不會放大原圖。
+- HTML 自動加入 `srcset`、`sizes`、`width`、`height` 與非同步解碼設定。
+- 首屏主圖優先下載；列表、文章列與頁面下方圖片延遲下載。
+- 社群分享圖使用約 1200px 的壓縮版本，不再直接傳送大型 PNG。
+- 原圖保留在 `static/assets/images/`，產生的版本只放在 `dist/assets/images/responsive/`，請勿手動編輯。
+
+若只想從命令列執行完整圖片最佳化與建置，也可以使用：
+
+```powershell
+python tools/add_content.py build
+```
 
 ## 新增文章
 
@@ -94,7 +116,7 @@ python tools/add_content.py article `
 
 ## GitHub Pages 部署
 
-專案已包含 `.github/workflows/pages.yml`。推送到 `main` 後，GitHub Actions 會執行 Python 建置、產生正確的社群分享網址，並部署 `dist/`。
+專案已包含 `.github/workflows/pages.yml`。推送到 `main` 後，GitHub Actions 會安裝 Pillow、自動最佳化圖片、執行 Python 建置、產生正確的社群分享網址，並部署 `dist/`。
 
 1. 在 GitHub 建立空白 repository。
 2. 在本資料夾執行：
@@ -117,8 +139,8 @@ git push -u origin main
 python tools/validate_site.py
 ```
 
-此指令會重建網站，檢查所有內部連結、圖片、頁面標題、主標題與圖片替代文字。
+此指令會重新最佳化圖片並重建網站，檢查所有內部連結、響應式圖片、圖片尺寸、頁面標題、主標題與圖片替代文字。
 
 ## 動畫與無障礙
 
-網站包含首頁分段進場、內頁捲動浮現、作品卡片、文章列、按鈕箭頭與手機選單動畫。動畫以 CSS 與原生 JavaScript 實作，不影響純靜態部署；若訪客在作業系統開啟「減少動態效果」，網站會自動停用動畫。
+網站包含首頁分段進場、內頁捲動浮現、作品卡片、文章列、按鈕箭頭與手機選單動畫。手機版使用較短的動畫時間，減少等待感；若訪客在作業系統開啟「減少動態效果」，網站會自動停用動畫。

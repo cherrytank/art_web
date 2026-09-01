@@ -1,8 +1,4 @@
-"""Build the complete static site from JSON content and HTML templates.
-
-This project intentionally uses only Python's standard library so the same
-command works locally and in GitHub Actions without installing dependencies.
-"""
+"""Build the static site, including responsive delivery images."""
 
 from __future__ import annotations
 
@@ -11,9 +7,12 @@ import json
 import os
 import re
 import shutil
+from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
+
+from image_pipeline import ImageBuildReport, ResponsiveImage, build_responsive_images
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,6 +22,19 @@ DIST = ROOT / "dist"
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 NAV_KEYS = ("home", "about", "works", "exhibitions", "classes", "writings", "contact")
 SITE_URL = os.environ.get("SITE_URL", "").rstrip("/")
+IMAGE_SOURCE = ROOT / "static" / "assets" / "images"
+RESPONSIVE_OUTPUT = DIST / "assets" / "images" / "responsive"
+IMAGE_CATALOG: dict[str, ResponsiveImage] = {}
+HERO_IMAGE_SIZES = "(max-width: 760px) 100vw, 56vw"
+CARD_IMAGE_SIZES = "(max-width: 760px) 100vw, 50vw"
+DETAIL_IMAGE_SIZES = "(max-width: 760px) 100vw, 55vw"
+ARTICLE_THUMB_SIZES = "(max-width: 760px) 100vw, 180px"
+
+
+@dataclass(frozen=True)
+class BuildReport:
+    page_count: int
+    images: ImageBuildReport
 
 
 def read_text(path: Path) -> str:
@@ -36,6 +48,53 @@ def load_json(path: Path) -> Any:
 
 def escape(value: object) -> str:
     return html.escape(str(value), quote=True)
+
+
+def responsive_image(
+    filename: str,
+    alt: str,
+    root: str,
+    sizes: str,
+    *,
+    css_class: str = "",
+    priority: bool = False,
+) -> str:
+    """Render an image that lets each device choose an appropriate width."""
+    try:
+        asset = IMAGE_CATALOG[filename]
+    except KeyError as error:
+        raise ValueError(f"圖片尚未納入最佳化流程：{filename}") from error
+
+    image_root = f"{root}assets/images/responsive/"
+    fallback = asset.preferred(1200)
+    srcset = ", ".join(
+        f"{image_root}{variant.filename} {variant.width}w"
+        for variant in asset.variants
+    )
+    attributes = [
+        f'src="{image_root}{fallback.filename}"',
+        f'srcset="{srcset}"',
+        f'sizes="{escape(sizes)}"',
+        f'width="{asset.width}"',
+        f'height="{asset.height}"',
+        f'alt="{escape(alt)}"',
+        'decoding="async"',
+        'loading="eager"' if priority else 'loading="lazy"',
+    ]
+    if css_class:
+        attributes.append(f'class="{escape(css_class)}"')
+    if priority:
+        attributes.append('fetchpriority="high"')
+    return "<img " + " ".join(attributes) + ">"
+
+
+def social_image_path(filename: str) -> str:
+    """Return a compressed 1200px-class asset for social metadata."""
+    try:
+        asset = IMAGE_CATALOG[filename]
+    except KeyError as error:
+        raise ValueError(f"找不到社群分享圖片：{filename}") from error
+    return f"responsive/{asset.preferred(1200).filename}"
 
 
 def render(template: str, **values: object) -> str:
@@ -88,7 +147,7 @@ def write_page(
     if SITE_URL:
         page_path = output.removesuffix("index.html")
         page_url = f"{SITE_URL}/{page_path}".rstrip("/") + "/"
-        image_url = f"{SITE_URL}/assets/images/{social_image}"
+        image_url = f"{SITE_URL}/assets/images/{social_image_path(social_image)}"
         social_tags.extend(
             [
                 f'<link rel="canonical" href="{escape(page_url)}">',
@@ -114,11 +173,21 @@ def write_page(
 
 
 def build_home(site: dict[str, Any]) -> None:
+    main = render(
+        read_text(TEMPLATES / "home.html"),
+        home_image=responsive_image(
+            "artist-working.webp",
+            "油畫藝術家沈東榮於工作室創作",
+            "",
+            HERO_IMAGE_SIZES,
+            priority=True,
+        ),
+    )
     write_page(
         "index.html",
         title=f"{site['name_zh']}｜{site['role_zh']}",
         description=site["tagline_zh"],
-        main=read_text(TEMPLATES / "home.html"),
+        main=main,
         root="",
         active="home",
         body_class="page-home",
@@ -139,6 +208,13 @@ def build_about(site: dict[str, Any]) -> None:
     main = render(
         read_text(TEMPLATES / "about.html"),
         root="../",
+        portrait_image=responsive_image(
+            "artist-portrait.webp",
+            "沈東榮自畫像",
+            "../",
+            DETAIL_IMAGE_SIZES,
+            priority=True,
+        ),
         intro_zh=escape(data["intro_zh"]),
         intro_en=escape(data["intro_en"]),
         philosophy=escape(data["philosophy"]),
@@ -165,8 +241,7 @@ def work_card(work: dict[str, Any], root: str) -> str:
     return (
         f'<article class="work-card" data-year="{escape(work["year"])}" '
         f'data-search="{escape(search)}"><a href="{root}works/{escape(work["slug"])}/index.html">'
-        f'<div class="work-image"><img src="{root}assets/images/{escape(work["image"])}" '
-        f'alt="{escape(work["alt"])}" loading="lazy"></div>'
+        f'<div class="work-image">{responsive_image(work["image"], work["alt"], root, CARD_IMAGE_SIZES)}</div>'
         f'<div class="work-meta"><h2>{escape(work["title_zh"])}'
         f'<small>{escape(work["title_en"])}</small></h2>'
         f'<p>{escape(work["year"])}<br>{escape(work["dimensions"])}</p></div></a></article>'
@@ -180,6 +255,13 @@ def build_works(site: dict[str, Any], works: list[dict[str, Any]]) -> None:
     main = render(
         read_text(TEMPLATES / "works-index.html"),
         root="../",
+        hero_image=responsive_image(
+            "artist-working.webp",
+            "沈東榮於工作室創作",
+            "../",
+            HERO_IMAGE_SIZES,
+            priority=True,
+        ),
         year_options=year_options,
         work_count=len(works),
         works="".join(work_card(work, "../") for work in works),
@@ -203,8 +285,13 @@ def build_works(site: dict[str, Any], works: list[dict[str, Any]]) -> None:
         detail = render(
             detail_template,
             root="../../",
-            image=escape(work["image"]),
-            alt=escape(work["alt"]),
+            work_image=responsive_image(
+                work["image"],
+                work["alt"],
+                "../../",
+                DETAIL_IMAGE_SIZES,
+                priority=True,
+            ),
             year=escape(work["year"]),
             title_zh=escape(work["title_zh"]),
             title_en=escape(work["title_en"]),
@@ -235,7 +322,18 @@ def build_exhibitions(site: dict[str, Any]) -> None:
         f'<p>{escape(item["city"])}</p></article>'
         for item in items
     )
-    main = render(read_text(TEMPLATES / "exhibitions.html"), root="../", exhibitions=rows)
+    main = render(
+        read_text(TEMPLATES / "exhibitions.html"),
+        root="../",
+        hero_image=responsive_image(
+            "work-yushan.webp",
+            "夕陽映照山峰與秋色山林的油畫作品",
+            "../",
+            HERO_IMAGE_SIZES,
+            priority=True,
+        ),
+        exhibitions=rows,
+    )
     write_page(
         "exhibitions/index.html",
         title=f"展覽資訊｜{site['name_zh']}",
@@ -257,6 +355,19 @@ def build_classes(site: dict[str, Any]) -> None:
     main = render(
         read_text(TEMPLATES / "classes.html"),
         root="../",
+        hero_image=responsive_image(
+            "artist-studio.webp",
+            "沈東榮於工作室進行油畫創作",
+            "../",
+            "100vw",
+            priority=True,
+        ),
+        course_image=responsive_image(
+            "work-white-flower.webp",
+            "白花與藍色花器的油畫示範作品",
+            "../",
+            DETAIL_IMAGE_SIZES,
+        ),
         title=escape(data["title"]),
         intro=escape(data["intro"]),
         course=escape(data["course"]),
@@ -285,8 +396,7 @@ def article_row(article: dict[str, Any], root: str) -> str:
         f'<time datetime="{escape(article["date"])}">{date_display(article["date"])}</time>'
         f'<div><h2>{escape(article["title"])}</h2><p>{escape(article["category_en"])}・'
         f'{escape(article["category_zh"])}</p></div>'
-        f'<img src="{root}assets/images/{escape(article["image"])}" '
-        f'alt="{escape(article["image_alt"])}" loading="lazy">'
+        f'{responsive_image(article["image"], article["image_alt"], root, ARTICLE_THUMB_SIZES)}'
         f'<a href="{root}writings/{escape(article["slug"])}/index.html">Read article →</a></article>'
     )
 
@@ -314,6 +424,13 @@ def build_writings(site: dict[str, Any], articles: list[dict[str, Any]]) -> None
     main = render(
         read_text(TEMPLATES / "writings-index.html"),
         root="../",
+        hero_image=responsive_image(
+            "work-yushan.webp",
+            "夕陽映照山峰與秋色山林的油畫作品",
+            "../",
+            HERO_IMAGE_SIZES,
+            priority=True,
+        ),
         articles="".join(article_row(article, "../") for article in articles),
     )
     write_page(
@@ -337,8 +454,13 @@ def build_writings(site: dict[str, Any], articles: list[dict[str, Any]]) -> None
             category_en=escape(article["category_en"]),
             title=escape(article["title"]),
             summary=escape(article["summary"]),
-            image=escape(article["image"]),
-            image_alt=escape(article["image_alt"]),
+            article_image=responsive_image(
+                article["image"],
+                article["image_alt"],
+                "../../",
+                DETAIL_IMAGE_SIZES,
+                priority=True,
+            ),
             body=render_article_blocks(article["body"]),
         )
         write_page(
@@ -358,6 +480,13 @@ def build_contact(site: dict[str, Any]) -> None:
     main = render(
         read_text(TEMPLATES / "contact.html"),
         root="../",
+        signature_image=responsive_image(
+            "signature.webp",
+            "沈東榮簽名",
+            "../",
+            "(max-width: 760px) 45vw, 330px",
+            css_class="contact-signature",
+        ),
         intro=escape(data["intro"]),
         email=escape(data["email"]),
         instagram_url=escape(data["instagram_url"]),
@@ -374,7 +503,9 @@ def build_contact(site: dict[str, Any]) -> None:
     )
 
 
-def build() -> None:
+def build() -> BuildReport:
+    global IMAGE_CATALOG
+
     site = load_json(CONTENT / "site.json")
     works = load_records("works")
     articles = load_records("articles")
@@ -384,8 +515,9 @@ def build() -> None:
     (DIST / "assets").mkdir(parents=True)
     shutil.copytree(ROOT / "static" / "css", DIST / "assets" / "css")
     shutil.copytree(ROOT / "static" / "js", DIST / "assets" / "js")
-    shutil.copytree(ROOT / "static" / "assets" / "images", DIST / "assets" / "images")
+    shutil.copytree(IMAGE_SOURCE, DIST / "assets" / "images")
     shutil.copy2(ROOT / "static" / "favicon.svg", DIST / "assets" / "favicon.svg")
+    IMAGE_CATALOG, image_report = build_responsive_images(IMAGE_SOURCE, RESPONSIVE_OUTPUT)
 
     build_home(site)
     build_about(site)
@@ -397,7 +529,12 @@ def build() -> None:
     (DIST / ".nojekyll").write_text("", encoding="utf-8")
 
     page_count = len(list(DIST.rglob("*.html")))
-    print(f"Built {page_count} pages in {DIST}")
+    report = BuildReport(page_count=page_count, images=image_report)
+    print(
+        f"Built {page_count} pages and {image_report.variant_count} responsive image variants "
+        f"from {image_report.source_count} sources in {DIST}"
+    )
+    return report
 
 
 if __name__ == "__main__":
