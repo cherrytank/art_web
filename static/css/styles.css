@@ -22,7 +22,7 @@ body {
   -webkit-font-smoothing: antialiased;
   animation: page-enter .65s cubic-bezier(.22, 1, .36, 1) both;
 }
-img { display: block; max-width: 100%; }
+img { display: block; max-width: 100%; height: auto; }
 a { color: inherit; }
 .skip-link { position: fixed; left: 1rem; top: -5rem; z-index: 100; padding: .75rem 1rem; color: white; background: #241f1a; }
 .skip-link:focus { top: 1rem; }
