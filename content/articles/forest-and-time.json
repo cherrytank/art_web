@@ -1,0 +1,19 @@
+{
+  "kind": "article",
+  "slug": "forest-and-time",
+  "title": "論沈東榮作品中的山林與時間感",
+  "date": "2025-12-01",
+  "category": "art-criticism",
+  "category_zh": "藝術評論",
+  "category_en": "Art Criticism",
+  "image": "work-forest-time.webp",
+  "image_alt": "藍紫山巒與秋色森林的油畫作品",
+  "summary": "山林不只是風景主題，也是顏料、觀看與時間相互沉積的場所。",
+  "body": [
+    {"type": "lead", "text": "在沈東榮的山林作品中，風景並不是被如實搬運到畫布上的對象，而是一段觀看經驗被重新組織後留下的結果。"},
+    {"type": "heading", "text": "景物與筆觸"},
+    {"type": "paragraph", "text": "近景林木常以密集的短筆觸交疊，遠方山體則被歸納成較大的色面。兩種節奏的並置，使畫面同時具有空間深度與表面肌理。"},
+    {"type": "heading", "text": "時間如何進入畫面"},
+    {"type": "paragraph", "text": "色層的乾濕、覆蓋與擦拭，讓時間不只是畫面所描繪的季節，也成為作品實際的構成方法。觀者看見的風景，因此同時包含了自然的時間與繪畫工作的時間。"}
+  ]
+}

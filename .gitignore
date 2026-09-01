@@ -1,0 +1,17 @@
+# Local inspection and generated output
+/.codex-work/
+/dist/
+__pycache__/
+*.py[cod]
+
+# Original planning/source files are kept locally, not published to Pages
+/1_首頁home/
+/2_關於我about me/
+/3_作品works/
+/整理給弘瑄架設網站的資料/
+/網站模板風格架構ppt.pptx
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/

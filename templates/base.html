@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{{description}}">
+  <meta name="theme-color" content="#f4f0e9">
+  {{social_meta}}
+  <title>{{title}}</title>
+  <link rel="icon" href="{{root}}assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="{{root}}assets/css/styles.css">
+</head>
+<body class="{{body_class}}">
+  <a class="skip-link" href="#main-content">跳至主要內容</a>
+  <header class="site-header" data-header>
+    <a class="brand" href="{{root}}index.html" aria-label="沈東榮首頁">
+      <span class="brand-en">SHEN TUNG-JUNG</span>
+    </a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
+      <span>選單</span><i></i><i></i>
+    </button>
+    <nav class="site-nav" id="site-nav" aria-label="主要導覽">
+      <a {{home_active}} href="{{root}}index.html"><span>首頁</span><small>Home</small></a>
+      <a {{about_active}} href="{{root}}about/index.html"><span>關於</span><small>About</small></a>
+      <a {{works_active}} href="{{root}}works/index.html"><span>作品</span><small>Works</small></a>
+      <a {{exhibitions_active}} href="{{root}}exhibitions/index.html"><span>展覽資訊</span><small>Exhibitions</small></a>
+      <a {{classes_active}} href="{{root}}classes/index.html"><span>油畫教學</span><small>Oil Painting Classes</small></a>
+      <a {{writings_active}} href="{{root}}writings/index.html"><span>藝評・文章</span><small>Writings</small></a>
+      <a {{contact_active}} href="{{root}}contact/index.html"><span>聯絡我們</span><small>Contact</small></a>
+    </nav>
+  </header>
+  <main id="main-content">{{main}}</main>
+  <footer class="site-footer">
+    <p><span>沈東榮</span> SHEN TUNG-JUNG</p>
+    <p>© {{year}} Shen Tung-Jung. All rights reserved.</p>
+  </footer>
+  <script src="{{root}}assets/js/site.js" defer></script>
+</body>
+</html>

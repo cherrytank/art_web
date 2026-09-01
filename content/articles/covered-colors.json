@@ -1,0 +1,18 @@
+{
+  "kind": "article",
+  "slug": "covered-colors",
+  "title": "色彩被覆蓋之後，真的消失了嗎？",
+  "date": "2026-06-21",
+  "category": "painting-notes",
+  "category_zh": "創作筆記",
+  "category_en": "Painting Notes",
+  "image": "work-white-flower.webp",
+  "image_alt": "黑色背景中白花與藍色花器的油畫",
+  "summary": "從覆色、擦拭到再次堆疊，談油畫表面之下仍然存在的時間。",
+  "body": [
+    {"type": "lead", "text": "畫面上的色彩會被新的顏料遮住，但它不一定因此消失。它改變了上層顏色的明度、溫度，也改變了我下一筆落下的位置。"},
+    {"type": "paragraph", "text": "油畫的過程經常不是向前直走。覆蓋、刮除、等待乾燥，再重新觀看；每一次修改都讓畫面累積一層時間。即使觀者看不見最初的顏色，表面的微小起伏與邊緣仍會留下它曾經存在的證據。"},
+    {"type": "quote", "text": "被覆蓋的色彩，往往以另一種方式支撐著最後被看見的部分。"},
+    {"type": "paragraph", "text": "因此，完成並不是把所有痕跡整理乾淨，而是讓不同時間的筆觸能在同一個畫面裡取得平衡。"}
+  ]
+}

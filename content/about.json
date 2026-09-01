@@ -1,0 +1,19 @@
+{
+  "intro_zh": "從求學到創作，從教學到展覽，持續在油畫的世界裡探索、累積與實踐。",
+  "intro_en": "From academic training to creative practice, from teaching to exhibitions, he continues to explore and realize his vision through oil painting.",
+  "philosophy": "以生活中的風景、花木與靜物為起點，在反覆堆疊與擦拭之間，尋找光線、時間與記憶留下的痕跡。",
+  "education": [
+    {"year": "1993", "zh": "私立東海大學美術學系畢業", "en": "B.F.A., Department of Fine Arts, Tunghai University"},
+    {"year": "1996", "zh": "國立中央大學哲學研究所", "en": "M.A., Graduate Institute of Philosophy, National Central University"},
+    {"year": "2008", "zh": "中國美術學院文學博士", "en": "Ph.D., China Academy of Art"}
+  ],
+  "positions": [
+    {"period": "2000.2–2003.6", "title": "國立宜蘭技術學院兼任講師"},
+    {"period": "2003.9–2005.6", "title": "宜蘭大學兼任講師"},
+    {"period": "1999.3 起", "title": "宜蘭社區大學講師"},
+    {"period": "1998.8 起", "title": "宜蘭縣私立慧燈中學教師"},
+    {"period": "2010 年 4 月起", "title": "宜蘭縣藝術學會理事長"},
+    {"period": "2010 年 10 月起", "title": "學學文創志業藝術課程講師"}
+  ],
+  "current": "宜蘭縣藝術學會理事長"
+}

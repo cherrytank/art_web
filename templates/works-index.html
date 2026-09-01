@@ -1,0 +1,17 @@
+<section class="page-hero works-hero">
+  <div>
+    <p class="section-kicker">Selected Works</p>
+    <h1>作品</h1>
+    <p>從自然風景到靜物花卉，觀看光影、色彩與時間在畫布上的細微變化。</p>
+  </div>
+  <img src="{{root}}assets/images/artist-working.webp" alt="沈東榮於工作室創作">
+</section>
+<section class="catalog page-section">
+  <div class="catalog-tools">
+    <label class="search-field"><span>搜尋作品</span><input type="search" placeholder="作品名稱、年份或媒材" data-work-search></label>
+    <label class="select-field"><span>年份</span><select data-work-year><option value="all">全部年份</option>{{year_options}}</select></label>
+    <p class="result-count" aria-live="polite" data-work-count>{{work_count}} 件作品</p>
+  </div>
+  <div class="works-grid" data-work-grid>{{works}}</div>
+  <p class="empty-message" hidden data-work-empty>沒有符合條件的作品。</p>
+</section>

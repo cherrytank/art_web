@@ -1,0 +1,17 @@
+{
+  "kind": "article",
+  "slug": "before-autumn-arrives",
+  "title": "《秋實》：在秋天抵達以前",
+  "date": "2026-06-13",
+  "category": "artwork-story",
+  "category_zh": "作品故事",
+  "category_en": "Artwork Story",
+  "image": "work-autumn-fruit.webp",
+  "image_alt": "枝枒間橙紅果實的油畫作品《秋實》",
+  "summary": "果實、枝枒與灰白天空之間，一幅畫如何保存季節尚未完成的狀態。",
+  "body": [
+    {"type": "lead", "text": "《秋實》畫的不是季節已經抵達的瞬間，而是空氣正在改變、果實逐漸轉紅的那段過程。"},
+    {"type": "paragraph", "text": "我先以灰白色建立背景，讓枝條保留足夠的呼吸，再把橙紅色分散在畫面各處。顏色沒有平均排列，而是隨著枝條的方向形成疏密，觀看的視線因此在畫面中來回移動。"},
+    {"type": "paragraph", "text": "當果實的亮色與背景的冷灰取得平衡，畫面也就停在一個既飽滿、又仍然等待變化的時刻。"}
+  ]
+}

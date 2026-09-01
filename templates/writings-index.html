@@ -1,0 +1,18 @@
+<section class="page-hero writings-hero">
+  <div>
+    <p class="section-kicker">Art Criticism・Painting Notes・Artwork Stories</p>
+    <h1>Writings</h1>
+    <p>藝術評論・創作筆記・作品閱讀</p>
+    <blockquote>在時間堆疊的色層中，光不是照亮，而是逐漸浮現。</blockquote>
+  </div>
+  <img src="{{root}}assets/images/work-yushan.webp" alt="夕陽映照山峰與秋色山林的油畫作品">
+</section>
+<section class="writings-list page-section">
+  <div class="filter-tabs" role="group" aria-label="文章分類">
+    <button class="is-active" type="button" data-article-filter="all">全部 <small>All</small></button>
+    <button type="button" data-article-filter="art-criticism">藝術評論 <small>Art Criticism</small></button>
+    <button type="button" data-article-filter="painting-notes">創作筆記 <small>Painting Notes</small></button>
+    <button type="button" data-article-filter="artwork-story">作品故事 <small>Artwork Stories</small></button>
+  </div>
+  <div class="article-rows">{{articles}}</div>
+</section>
