@@ -1,0 +1,39 @@
+{
+  "kind": "exhibition",
+  "slug": "verdant-emergence-2026",
+  "year": "2026",
+  "title_zh": "凝翠・出岫",
+  "title_en": "Verdant Emergence",
+  "subtitle": "沈東榮油畫個展",
+  "artist": "沈東榮 Laurent Shen",
+  "date": "2026.07.01–2026.09.30",
+  "venue": "筑波藝廊",
+  "city": "新竹",
+  "address": "新竹縣竹北市生醫二路 66 號 筑波醫電大樓 1F",
+  "opening_hours": "週一至週五 09:00–18:00（週六、週日休館）",
+  "cover_image": "work-026020.jpg",
+  "cover_alt": "沈東榮〈荷塘春色〉，凝翠・出岫展覽主視覺",
+  "poster_image": "exhibition-verdant-poster.jpg",
+  "poster_alt": "凝翠・出岫—沈東榮油畫個展海報",
+  "introduction": [
+    "沈東榮以油彩為墨的獨特藝術語彙，將西方媒材化為充滿禪意的自然觀照，從鋪疊的油彩中，呈現東方的靜謐與幽遠。",
+    "本次展出以作者最具代表性的兩大視覺意象：「凝翠」意喻作者的多層次油彩堆疊凝練為靈動的色彩，尤其是他的荷塘翠竹綠意，細細堆疊的油彩織就為澄澈的心靈風光；而在「出岫」的空濛山林中，皴擦斑駁的肌理與湧動的雲煙交織，將山氣氤氳、白雲變幻的動態定格於畫布。一靜一動、一池一山，皆透露出作者對自然造化的深情凝視。",
+    "誠摯邀請您走進這片由綠意與煙雲構築的詩意世界，在凝翠的池畔駐足，隨出岫的雲嵐遠眺，細細品味畫面中那份安靜與美好。"
+  ],
+  "gallery": [
+    "exhibition-verdant-view-07.jpg",
+    "exhibition-verdant-view-08.jpg",
+    "exhibition-verdant-view-05.jpg",
+    "exhibition-verdant-view-06.jpg",
+    "exhibition-verdant-view-02.jpg",
+    "exhibition-verdant-view-01.jpg",
+    "exhibition-verdant-view-03.jpg",
+    "exhibition-verdant-view-04.jpg"
+  ],
+  "selected_work_slugs": [
+    "work-026020",
+    "work-026007",
+    "work-026008",
+    "work-026003"
+  ]
+}

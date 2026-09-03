@@ -1,0 +1,59 @@
+<article class="exhibition-detail">
+  <header class="exhibition-detail-hero page-section">
+    <div class="exhibition-detail-intro">
+      <p class="section-kicker">Exhibition・{{year}}</p>
+      <h1>{{title_zh}}</h1>
+      <p class="exhibition-title-en">{{title_en}}</p>
+      <div class="short-rule"></div>
+      <p class="exhibition-subtitle">{{artist}}<br>{{subtitle}}</p>
+      <p>{{date}}<br>{{venue}}・{{city}}</p>
+      <a class="text-link" href="#exhibition-view">更多照片 <span aria-hidden="true">↓</span></a>
+    </div>
+    <figure>{{cover_image}}</figure>
+  </header>
+
+  <section class="exhibition-about page-section">
+    <div class="section-heading">
+      <p class="section-kicker">About the Exhibition</p>
+      <h2>展覽介紹</h2>
+    </div>
+    <div class="exhibition-prose">{{introduction}}</div>
+    <figure class="exhibition-poster">{{poster_image}}</figure>
+  </section>
+
+  <section class="exhibition-view page-section" id="exhibition-view">
+    <div class="section-heading">
+      <p class="section-kicker">Exhibition View</p>
+      <h2>展場現場</h2>
+    </div>
+    <div class="exhibition-photo-grid">{{gallery}}</div>
+  </section>
+
+  <section class="exhibition-selected page-section">
+    <div class="section-heading">
+      <p class="section-kicker">Selected Works</p>
+      <h2>展出作品</h2>
+    </div>
+    <div class="exhibition-works-grid">{{selected_works}}</div>
+  </section>
+
+  <section class="exhibition-information page-section">
+    <div class="section-heading">
+      <p class="section-kicker">Exhibition Information</p>
+      <h2>展覽資訊</h2>
+    </div>
+    <dl>
+      <div><dt>展覽名稱</dt><dd>{{title_zh}}—{{subtitle}}</dd></div>
+      <div><dt>展期</dt><dd>{{date}}</dd></div>
+      <div><dt>地點</dt><dd>{{venue}}</dd></div>
+      <div><dt>地址</dt><dd>{{address}}</dd></div>
+      <div><dt>開放時間</dt><dd>{{opening_hours}}</dd></div>
+    </dl>
+  </section>
+
+  <nav class="exhibition-pagination page-section" aria-label="展覽頁面導覽">
+    {{previous_exhibition}}
+    <a href="{{root}}exhibitions/index.html"><small>All Exhibitions</small>所有展覽</a>
+    {{next_exhibition}}
+  </nav>
+</article>

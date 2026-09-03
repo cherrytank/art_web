@@ -212,6 +212,14 @@ def build_about(site: dict[str, Any]) -> None:
         f'<p><time>{escape(item["period"])}</time><span>{escape(item["title"])}</span></p>'
         for item in data["positions"]
     )
+    current_data = data["current"]
+    if isinstance(current_data, list):
+        current = "".join(
+            f'<p>{escape(item["zh"])}<small>{escape(item.get("en", ""))}</small></p>'
+            for item in current_data
+        )
+    else:
+        current = f"<p>{escape(current_data)}</p>"
     main = render(
         read_text(TEMPLATES / "about.html"),
         root="../",
@@ -229,7 +237,7 @@ def build_about(site: dict[str, Any]) -> None:
         philosophy=escape(data["philosophy"]),
         education=education,
         positions=positions,
-        current=escape(data["current"]),
+        current=current,
     )
     write_page(
         "about/index.html",
@@ -408,24 +416,60 @@ def build_works(site: dict[str, Any], works: list[dict[str, Any]]) -> None:
         )
 
 
-def build_exhibitions(site: dict[str, Any]) -> None:
-    items = load_json(CONTENT / "exhibitions.json")
-    rows = "".join(
+def exhibition_row(item: dict[str, Any], root: str) -> str:
+    title = f"《{escape(item['title'])}》"
+    if item.get("slug"):
+        title = (
+            f'<a href="{root}exhibitions/{escape(item["slug"])}/index.html">'
+            f"{title}<span aria-hidden=\"true\">→</span></a>"
+        )
+    return (
         f'<article class="exhibition-row"><time>{escape(item["year"])}</time>'
-        f'<h3>《{escape(item["title"])}》</h3><p>{escape(item["venue"])}</p>'
-        f'<p>{escape(item["city"])}</p></article>'
-        for item in items
+        f"<h3>{title}</h3><p>{escape(item['venue'])}</p>"
+        f"<p>{escape(item['city'])}</p></article>"
+    )
+
+
+def exhibition_page_link(
+    item: dict[str, Any] | None,
+    root: str,
+    direction: str,
+) -> str:
+    label = "上一個展覽" if direction == "previous" else "下一個展覽"
+    english = "Previous Exhibition" if direction == "previous" else "Next Exhibition"
+    if item is None:
+        return f'<span class="is-disabled"><small>{english}</small>{label}</span>'
+    return (
+        f'<a href="{root}exhibitions/{escape(item["slug"])}/index.html">'
+        f"<small>{english}</small>{label}</a>"
+    )
+
+
+def build_exhibitions(
+    site: dict[str, Any],
+    works: list[dict[str, Any]],
+    details: list[dict[str, Any]],
+) -> None:
+    items = load_json(CONTENT / "exhibitions.json")
+    rows = "".join(exhibition_row(item, "../") for item in items)
+    current_items = [item for item in items if item.get("current")]
+    current_exhibitions = "".join(
+        '<article class="current-exhibition-card">'
+        f'<p>{escape(item["year"])}</p><h3>《{escape(item["title"])}》</h3>'
+        f'<p>{escape(item["venue"])}・{escape(item["city"])}</p></article>'
+        for item in current_items
     )
     main = render(
         read_text(TEMPLATES / "exhibitions.html"),
         root="../",
         hero_image=responsive_image(
-            "work-yushan.webp",
-            "夕陽映照山峰與秋色山林的油畫作品",
+            "work-026020.jpg",
+            "凝翠・出岫展覽主視覺〈荷塘春色〉",
             "../",
             HERO_IMAGE_SIZES,
             priority=True,
         ),
+        current_exhibitions=current_exhibitions,
         exhibitions=rows,
     )
     write_page(
@@ -437,6 +481,76 @@ def build_exhibitions(site: dict[str, Any]) -> None:
         active="exhibitions",
         body_class="page-exhibitions",
     )
+
+    work_by_slug = {work["slug"]: work for work in works}
+    detail_template = read_text(TEMPLATES / "exhibition-detail.html")
+    details = sorted(details, key=lambda item: (item["year"], item["title_zh"]), reverse=True)
+    for index, detail_data in enumerate(details):
+        selected_works: list[str] = []
+        for slug in detail_data.get("selected_work_slugs", []):
+            if slug not in work_by_slug:
+                raise ValueError(f"展覽引用了不存在的作品：{slug}")
+            selected_works.append(work_card(work_by_slug[slug], "../../"))
+
+        gallery = "".join(
+            '<figure>'
+            + responsive_image(
+                filename,
+                f'{detail_data["title_zh"]}展場現場照片 {photo_index}',
+                "../../",
+                "(max-width: 760px) 100vw, 42vw",
+            )
+            + "</figure>"
+            for photo_index, filename in enumerate(detail_data.get("gallery", []), start=1)
+        )
+        introduction = "".join(
+            f"<p>{escape(paragraph)}</p>"
+            for paragraph in detail_data.get("introduction", [])
+        )
+        previous_item = details[index - 1] if index > 0 else None
+        next_item = details[index + 1] if index + 1 < len(details) else None
+        detail = render(
+            detail_template,
+            root="../../",
+            year=escape(detail_data["year"]),
+            title_zh=escape(detail_data["title_zh"]),
+            title_en=escape(detail_data.get("title_en", "")),
+            subtitle=escape(detail_data["subtitle"]),
+            artist=escape(detail_data["artist"]),
+            date=escape(detail_data["date"]),
+            venue=escape(detail_data["venue"]),
+            city=escape(detail_data["city"]),
+            address=escape(detail_data["address"]),
+            opening_hours=escape(detail_data["opening_hours"]),
+            cover_image=responsive_image(
+                detail_data["cover_image"],
+                detail_data["cover_alt"],
+                "../../",
+                "(max-width: 760px) 100vw, 64vw",
+                priority=True,
+            ),
+            poster_image=responsive_image(
+                detail_data["poster_image"],
+                detail_data["poster_alt"],
+                "../../",
+                "(max-width: 760px) 100vw, 28vw",
+            ),
+            introduction=introduction,
+            gallery=gallery,
+            selected_works="".join(selected_works),
+            previous_exhibition=exhibition_page_link(previous_item, "../../", "previous"),
+            next_exhibition=exhibition_page_link(next_item, "../../", "next"),
+        )
+        write_page(
+            f'exhibitions/{detail_data["slug"]}/index.html',
+            title=f'{detail_data["title_zh"]}｜{site["name_zh"]}',
+            description=(detail_data.get("introduction") or [detail_data["title_zh"]])[0],
+            main=detail,
+            root="../../",
+            active="exhibitions",
+            body_class="page-exhibition-detail",
+            social_image=detail_data["cover_image"],
+        )
 
 
 def build_classes(site: dict[str, Any]) -> None:
@@ -603,6 +717,7 @@ def build() -> BuildReport:
     site = load_json(CONTENT / "site.json")
     works = load_records("works")
     articles = load_records("articles")
+    exhibition_details = load_records("exhibition_details")
 
     if DIST.exists():
         shutil.rmtree(DIST)
@@ -616,7 +731,7 @@ def build() -> BuildReport:
     build_home(site)
     build_about(site)
     build_works(site, works)
-    build_exhibitions(site)
+    build_exhibitions(site, works, exhibition_details)
     build_classes(site)
     build_writings(site, articles)
     build_contact(site)

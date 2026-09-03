@@ -19,6 +19,7 @@ python tools/content_manager.py
 管理介面有三個分頁：
 
 - **新增作品**：填寫作品編號、名稱、年份、媒材與尺寸；主圖及多張局部圖都可用按鈕選擇，作品說明可稍後再補。
+- **新增展覽**：填寫展覽名稱、展期與地點，選擇主視覺、海報、展場照片，並勾選網站既有作品；可直接設為當期展覽。
 - **新增文章**：填寫標題、分類、摘要與正文；段落之間空一行即可。
 - **網站維護**：重新最佳化全部圖片、產生網站、開啟本機預覽，或打開資料夾。
 
@@ -104,6 +105,7 @@ python tools/add_content.py article `
 - 個人基本資料：`content/site.json`
 - 學經歷與創作理念：`content/about.json`
 - 展覽紀錄：`content/exhibitions.json`
+- 展覽詳細頁：`content/exhibition_details/*.json`
 - 課程：`content/classes.json`
 - 聯絡方式：`content/contact.json`
 - 文章：`content/articles/*.json`

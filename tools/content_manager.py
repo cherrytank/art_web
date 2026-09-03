@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
@@ -305,6 +306,187 @@ class WorkForm(ScrollableForm):
         self.canvas.yview_moveto(0)
 
 
+class ExhibitionForm(ScrollableForm):
+    def __init__(self, parent: ttk.Notebook, app: "ContentManager") -> None:
+        super().__init__(parent)
+        self.app = app
+        self.values = {
+            "slug": StringVar(),
+            "year": StringVar(value=str(date.today().year)),
+            "title_zh": StringVar(),
+            "title_en": StringVar(),
+            "subtitle": StringVar(value="沈東榮油畫個展"),
+            "artist": StringVar(value="沈東榮 Laurent Shen"),
+            "date": StringVar(),
+            "venue": StringVar(),
+            "city": StringVar(),
+            "address": StringVar(),
+            "opening_hours": StringVar(),
+            "cover_image": StringVar(),
+            "poster_image": StringVar(),
+            "gallery": StringVar(),
+        }
+        self.current = BooleanVar(value=False)
+        fields = FormFields(self)
+        fields.heading(
+            "新增展覽",
+            "填寫展覽資訊、選擇主視覺與現場照片；儲存後會同時更新展覽列表與詳細頁。",
+        )
+        fields.entry("網址代稱", self.values["slug"], hint="可留白自動產生；若自行填寫，請使用英文小寫、數字與連字號。")
+        fields.entry("年份", self.values["year"], required=True)
+        fields.entry("展覽名稱", self.values["title_zh"], required=True)
+        fields.entry("英文名稱", self.values["title_en"], hint="沒有正式英文名稱時可留白。")
+        fields.entry("展覽類型", self.values["subtitle"], hint="例如：沈東榮油畫個展")
+        fields.entry("藝術家", self.values["artist"])
+        fields.entry("展期", self.values["date"], required=True, hint="例如：2026.07.01–2026.09.30")
+        fields.entry("展覽地點", self.values["venue"], required=True)
+        fields.entry("城市", self.values["city"], required=True)
+        fields.entry("地址", self.values["address"])
+        fields.entry("開放時間", self.values["opening_hours"])
+        fields.image_picker("展覽主視覺", self.values["cover_image"])
+        fields.image_picker("展覽海報／邀請卡", self.values["poster_image"])
+        fields.image_picker("展場照片", self.values["gallery"], multiple=True)
+        self.introduction = fields.text(
+            "展覽介紹",
+            required=True,
+            height=10,
+            hint="段落之間請空一行，網站會自動套用固定格式。",
+        )
+        ttk.Checkbutton(self.body, text="設為當期展覽", variable=self.current).grid(
+            row=fields.row, column=1, columnspan=2, sticky="w", pady=(8, 12)
+        )
+        fields.row += 1
+
+        ttk.Label(self.body, text="展出作品", style="FieldLabel.TLabel").grid(
+            row=fields.row, column=0, sticky="nw", padx=(0, 18), pady=(8, 3)
+        )
+        work_box = ttk.Frame(self.body)
+        work_box.grid(row=fields.row, column=1, columnspan=2, sticky="ew", pady=(4, 8))
+        work_box.columnconfigure(0, weight=1)
+        work_box.columnconfigure(1, weight=1)
+        self.work_choices: dict[str, BooleanVar] = {}
+        work_files = sorted((ROOT / "content" / "works").glob("*.json"))
+        for index, path in enumerate(work_files):
+            work = json.loads(path.read_text(encoding="utf-8"))
+            variable = BooleanVar(value=False)
+            self.work_choices[work["slug"]] = variable
+            label = f'{work.get("catalog_number", "")}　{work["title_zh"]}'.strip()
+            ttk.Checkbutton(work_box, text=label, variable=variable).grid(
+                row=index // 2,
+                column=index % 2,
+                sticky="w",
+                padx=(0, 18),
+                pady=3,
+            )
+        fields.row += 1
+        fields.actions(self.save, app.open_preview)
+
+    def save(self) -> None:
+        title_zh = self.values["title_zh"].get().strip()
+        year = self.values["year"].get().strip() or str(date.today().year)
+        exhibition_date = self.values["date"].get().strip()
+        venue = self.values["venue"].get().strip()
+        city = self.values["city"].get().strip()
+        cover_path = self.values["cover_image"].get().strip()
+        poster_path = self.values["poster_image"].get().strip()
+        gallery_paths = [
+            part.strip()
+            for part in self.values["gallery"].get().split("|")
+            if part.strip()
+        ]
+        raw_intro = self.introduction.get("1.0", "end").strip()
+        if not all((title_zh, exhibition_date, venue, city, cover_path, poster_path, gallery_paths, raw_intro)):
+            messagebox.showwarning(
+                "資料未完成",
+                "請填寫展覽名稱、展期、地點、城市與介紹，並選擇主視覺、海報及至少一張展場照片。",
+            )
+            return
+        if any(not valid_image(path) for path in [cover_path, poster_path, *gallery_paths]):
+            return
+
+        slug = self.values["slug"].get().strip() or generated_slug("exhibition")
+        try:
+            slug = add_content.validate_slug(slug)
+            cover_image = add_content.prepare_image(cover_path)
+            poster_image = add_content.prepare_image(poster_path)
+            gallery = [add_content.prepare_image(path) for path in gallery_paths]
+        except SystemExit as error:
+            messagebox.showerror("無法儲存", str(error))
+            return
+
+        record = {
+            "kind": "exhibition",
+            "slug": slug,
+            "year": year,
+            "title_zh": title_zh,
+            "title_en": self.values["title_en"].get().strip(),
+            "subtitle": self.values["subtitle"].get().strip() or "沈東榮油畫個展",
+            "artist": self.values["artist"].get().strip() or "沈東榮 Laurent Shen",
+            "date": exhibition_date,
+            "venue": venue,
+            "city": city,
+            "address": self.values["address"].get().strip(),
+            "opening_hours": self.values["opening_hours"].get().strip(),
+            "cover_image": cover_image,
+            "cover_alt": f"{title_zh}展覽主視覺",
+            "poster_image": poster_image,
+            "poster_alt": f"{title_zh}展覽海報",
+            "introduction": [
+                part.strip()
+                for part in re.split(r"\n\s*\n", raw_intro)
+                if part.strip()
+            ],
+            "gallery": gallery,
+            "selected_work_slugs": [
+                work_slug
+                for work_slug, variable in self.work_choices.items()
+                if variable.get()
+            ],
+        }
+        if not save_record_with_confirmation("exhibition_details", slug, record):
+            return
+
+        summary_path = ROOT / "content" / "exhibitions.json"
+        summaries = json.loads(summary_path.read_text(encoding="utf-8"))
+        if self.current.get():
+            for item in summaries:
+                item.pop("current", None)
+        summary = {
+            "year": year,
+            "title": title_zh,
+            "venue": venue,
+            "city": city,
+            "slug": slug,
+        }
+        if self.current.get():
+            summary["current"] = True
+        summaries = [
+            item
+            for item in summaries
+            if item.get("slug") != slug and item.get("title") != title_zh
+        ]
+        summaries.append(summary)
+        summaries.sort(key=lambda item: str(item.get("year", "")), reverse=True)
+        summary_path.write_text(
+            json.dumps(summaries, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        self.app.finish_save(f"展覽《{title_zh}》")
+        self.reset()
+
+    def reset(self) -> None:
+        for variable in self.values.values():
+            variable.set("")
+        self.values["year"].set(str(date.today().year))
+        self.values["subtitle"].set("沈東榮油畫個展")
+        self.values["artist"].set("沈東榮 Laurent Shen")
+        self.current.set(False)
+        for variable in self.work_choices.values():
+            variable.set(False)
+        self.introduction.delete("1.0", "end")
+        self.canvas.yview_moveto(0)
+
+
 class ArticleForm(ScrollableForm):
     def __init__(self, parent: ttk.Notebook, app: "ContentManager") -> None:
         super().__init__(parent)
@@ -404,6 +586,7 @@ class MaintenancePanel(ttk.Frame):
             ("最佳化圖片並重建網站", app.rebuild, "重新產生各種圖片尺寸與所有 HTML。"),
             ("開啟網站預覽", app.open_preview, "在瀏覽器查看目前網站。"),
             ("打開作品資料夾", lambda: open_folder(ROOT / "content" / "works"), "查看作品 JSON 資料。"),
+            ("打開展覽資料夾", lambda: open_folder(ROOT / "content" / "exhibition_details"), "查看展覽詳細頁 JSON 資料。"),
             ("打開文章資料夾", lambda: open_folder(ROOT / "content" / "articles"), "查看文章 JSON 資料。"),
             ("打開圖片資料夾", lambda: open_folder(add_content.ASSET_DIR), "管理已上傳的圖片。"),
             ("開啟使用說明", lambda: open_folder(ROOT / "README.md"), "閱讀完整操作方式。"),
@@ -434,13 +617,14 @@ class ContentManager(Tk):
         ttk.Label(header, text="沈東榮網站內容管理器", style="AppTitle.TLabel").pack(anchor="w")
         ttk.Label(
             header,
-            text="新增作品與文章・自動最佳化圖片・更新網站・本機預覽",
+            text="新增作品、展覽與文章・自動最佳化圖片・更新網站・本機預覽",
             style="AppSubtitle.TLabel",
         ).pack(anchor="w", pady=(5, 0))
 
         notebook = ttk.Notebook(self)
         notebook.pack(fill="both", expand=True, padx=18, pady=(0, 10))
         notebook.add(WorkForm(notebook, self), text="  新增作品  ")
+        notebook.add(ExhibitionForm(notebook, self), text="  新增展覽  ")
         notebook.add(ArticleForm(notebook, self), text="  新增文章  ")
         notebook.add(MaintenancePanel(notebook, self), text="  網站維護  ")
 

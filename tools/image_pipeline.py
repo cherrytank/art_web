@@ -90,8 +90,13 @@ def _output_stem(source: Path) -> str:
 def _generate_one(source: Path, output_dir: Path, output_stem: str) -> ResponsiveImage:
     try:
         with Image.open(source) as opened:
-            if getattr(opened, "is_animated", False):
+            if getattr(opened, "is_animated", False) and opened.format not in {"JPEG", "MPO"}:
                 raise ValueError("不支援動態圖片，請改用靜態 JPG、PNG、WebP 或 AVIF")
+            # Phone cameras may store a normal primary photo plus depth/preview
+            # data in an MPO container while keeping a .JPG filename. The first
+            # frame is the intended still image for the website.
+            if opened.format == "MPO":
+                opened.seek(0)
             image = _web_image(ImageOps.exif_transpose(opened))
     except (OSError, ValueError) as error:
         raise ValueError(f"無法處理圖片 {source.name}：{error}") from error
