@@ -205,6 +205,11 @@ a { color: inherit; }
 .current-exhibition-card { display: grid; grid-template-columns: 100px 1fr auto; gap: 24px; align-items: baseline; padding: 26px 28px; border: 1px solid var(--line); background: rgba(255,255,255,.54); }
 .current-exhibition-card p { margin: 0; color: var(--muted); }
 .current-exhibition-card h3 { margin: 0; font-size: clamp(1.35rem, 2.5vw, 2rem); font-weight: 400; }
+a.current-exhibition-card { color: inherit; text-decoration: none; transition: transform .25s ease, border-color .25s ease, background .25s ease, box-shadow .25s ease; }
+a.current-exhibition-card h3::after { content: " →"; display: inline-block; color: var(--accent); transition: transform .25s ease; }
+a.current-exhibition-card:hover, a.current-exhibition-card:focus-visible { border-color: rgba(89, 69, 51, .46); background: rgba(255,255,255,.82); box-shadow: 0 14px 34px rgba(55, 45, 35, .08); transform: translateY(-3px); }
+a.current-exhibition-card:hover h3::after, a.current-exhibition-card:focus-visible h3::after { transform: translateX(6px); }
+a.current-exhibition-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .exhibition-list { display: grid; grid-template-columns: 260px 1fr; gap: clamp(35px, 7vw, 110px); }
 .exhibition-rows { border-top: 1px solid var(--line); }
 .exhibition-row { display: grid; grid-template-columns: 110px 1.5fr 1fr 120px; gap: 24px; align-items: baseline; padding: 22px 0; border-bottom: 1px solid var(--line); }

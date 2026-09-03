@@ -439,6 +439,25 @@ def exhibition_row(item: dict[str, Any], root: str) -> str:
     )
 
 
+def current_exhibition_card(
+    item: dict[str, Any],
+    root: str,
+    detail_slugs: set[str],
+) -> str:
+    """Render a linked current exhibition only when its detail page exists."""
+    content = (
+        f'<p>{escape(item["year"])}</p><h3>《{escape(item["title"])}》</h3>'
+        f'<p>{escape(item["venue"])}・{escape(item["city"])}</p>'
+    )
+    slug = item.get("slug")
+    if slug and slug in detail_slugs:
+        return (
+            f'<a class="current-exhibition-card" '
+            f'href="{root}exhibitions/{escape(slug)}/index.html">{content}</a>'
+        )
+    return f'<article class="current-exhibition-card">{content}</article>'
+
+
 def exhibition_page_link(
     item: dict[str, Any] | None,
     root: str,
@@ -462,10 +481,9 @@ def build_exhibitions(
     items = load_json(CONTENT / "exhibitions.json")
     rows = "".join(exhibition_row(item, "../") for item in items)
     current_items = [item for item in items if item.get("current")]
+    detail_slugs = {detail["slug"] for detail in details}
     current_exhibitions = "".join(
-        '<article class="current-exhibition-card">'
-        f'<p>{escape(item["year"])}</p><h3>《{escape(item["title"])}》</h3>'
-        f'<p>{escape(item["venue"])}・{escape(item["city"])}</p></article>'
+        current_exhibition_card(item, "../", detail_slugs)
         for item in current_items
     )
     main = render(
