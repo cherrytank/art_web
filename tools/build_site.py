@@ -182,6 +182,13 @@ def build_home(site: dict[str, Any]) -> None:
             HERO_IMAGE_SIZES,
             priority=True,
         ),
+        home_signature=responsive_image(
+            "signature.webp",
+            "沈東榮簽名",
+            "",
+            "(max-width: 760px) 38vw, 230px",
+            css_class="home-signature",
+        ),
     )
     write_page(
         "index.html",
@@ -208,6 +215,8 @@ def build_about(site: dict[str, Any]) -> None:
     main = render(
         read_text(TEMPLATES / "about.html"),
         root="../",
+        education_url="index.html",
+        philosophy_url="philosophy/index.html",
         portrait_image=responsive_image(
             "artist-portrait.webp",
             "沈東榮自畫像",
@@ -232,24 +241,104 @@ def build_about(site: dict[str, Any]) -> None:
         body_class="page-about",
     )
 
+    statement = render(
+        read_text(TEMPLATES / "philosophy.html"),
+        education_url="../index.html",
+        philosophy_url="index.html",
+        portrait_image=responsive_image(
+            "artist-portrait.webp",
+            "沈東榮自畫像",
+            "../../",
+            DETAIL_IMAGE_SIZES,
+            priority=True,
+        ),
+        intro_zh=escape(data["intro_zh"]),
+        intro_en=escape(data["intro_en"]),
+        philosophy=escape(data["philosophy"]),
+    )
+    write_page(
+        "about/philosophy/index.html",
+        title=f"創作理念｜{site['name_zh']}",
+        description=data["philosophy"],
+        main=statement,
+        root="../../",
+        active="about",
+        body_class="page-about page-philosophy",
+    )
+
 
 def work_card(work: dict[str, Any], root: str) -> str:
     search = " ".join(
         str(work.get(key, ""))
-        for key in ("title_zh", "title_en", "year", "medium_zh", "dimensions")
+        for key in (
+            "catalog_number",
+            "title_zh",
+            "title_en",
+            "year",
+            "medium_zh",
+            "dimensions",
+        )
     ).lower()
+    title_en = (
+        f'<small>{escape(work["title_en"])}</small>'
+        if work.get("title_en")
+        else ""
+    )
     return (
         f'<article class="work-card" data-year="{escape(work["year"])}" '
         f'data-search="{escape(search)}"><a href="{root}works/{escape(work["slug"])}/index.html">'
         f'<div class="work-image">{responsive_image(work["image"], work["alt"], root, CARD_IMAGE_SIZES)}</div>'
-        f'<div class="work-meta"><h2>{escape(work["title_zh"])}'
-        f'<small>{escape(work["title_en"])}</small></h2>'
-        f'<p>{escape(work["year"])}<br>{escape(work["dimensions"])}</p></div></a></article>'
+        f'<div class="work-meta"><h2>{escape(work["title_zh"])}{title_en}</h2>'
+        f'<p>{escape(work.get("catalog_number", ""))}<br>{escape(work["year"])}<br>'
+        f'{escape(work["dimensions"])}</p></div></a></article>'
+    )
+
+
+def work_gallery(work: dict[str, Any], root: str) -> str:
+    """Render one artwork image or a swipeable set of supplied detail images."""
+    images = [work["image"], *work.get("gallery", [])]
+    if len(images) == 1:
+        return (
+            '<figure class="work-gallery-single">'
+            + responsive_image(
+                images[0],
+                work["alt"],
+                root,
+                DETAIL_IMAGE_SIZES,
+                priority=True,
+            )
+            + "</figure>"
+        )
+
+    slides: list[str] = []
+    for index, filename in enumerate(images):
+        alt = work["alt"] if index == 0 else f'{work["alt"]}局部 {index}'
+        slides.append(
+            '<figure class="gallery-slide">'
+            + responsive_image(
+                filename,
+                alt,
+                root,
+                DETAIL_IMAGE_SIZES,
+                priority=index == 0,
+            )
+            + "</figure>"
+        )
+    count = len(images)
+    return (
+        f'<section class="work-gallery" data-gallery aria-label="{escape(work["title_zh"])}作品圖庫">'
+        f'<div class="gallery-track" data-gallery-track>{"".join(slides)}</div>'
+        '<div class="gallery-controls">'
+        '<button type="button" data-gallery-prev aria-label="上一張作品圖片">←</button>'
+        f'<p aria-live="polite"><span data-gallery-current>1</span> / {count}</p>'
+        '<button type="button" data-gallery-next aria-label="下一張作品圖片">→</button>'
+        "</div></section>"
     )
 
 
 def build_works(site: dict[str, Any], works: list[dict[str, Any]]) -> None:
-    works = sorted(works, key=lambda item: (item["year"], item["title_zh"]), reverse=True)
+    works = sorted(works, key=lambda item: item.get("catalog_number", item["slug"]))
+    works = sorted(works, key=lambda item: item["year"], reverse=True)
     years = sorted({str(work["year"]) for work in works}, reverse=True)
     year_options = "".join(f'<option value="{escape(year)}">{escape(year)}</option>' for year in years)
     main = render(
@@ -281,31 +370,36 @@ def build_works(site: dict[str, Any], works: list[dict[str, Any]]) -> None:
         collection_row = ""
         if work.get("collection"):
             collection_row = f'<div><dt>典藏</dt><dd>{escape(work["collection"])}</dd></div>'
-        description = "".join(f"<p>{escape(text)}</p>" for text in work.get("description", []))
+        descriptions = work.get("description", [])
+        description = "".join(f"<p>{escape(text)}</p>" for text in descriptions)
+        title_en_line = (
+            f'<p class="detail-title-en">{escape(work["title_en"])}</p>'
+            if work.get("title_en")
+            else ""
+        )
         detail = render(
             detail_template,
             root="../../",
-            work_image=responsive_image(
-                work["image"],
-                work["alt"],
-                "../../",
-                DETAIL_IMAGE_SIZES,
-                priority=True,
-            ),
+            work_gallery=work_gallery(work, "../../"),
             year=escape(work["year"]),
             title_zh=escape(work["title_zh"]),
-            title_en=escape(work["title_en"]),
+            title_en_line=title_en_line,
+            catalog_number=escape(work.get("catalog_number", "")),
             medium_zh=escape(work["medium_zh"]),
             medium_en=escape(work["medium_en"]),
             dimensions=escape(work["dimensions"]),
             collection_row=collection_row,
-            description=description,
+            description_block=(f'<div class="prose">{description}</div>' if description else ""),
             slug=escape(work["slug"]),
         )
         write_page(
             f"works/{work['slug']}/index.html",
             title=f"{work['title_zh']}｜{site['name_zh']}",
-            description=work.get("description", [work["title_zh"]])[0],
+            description=(
+                descriptions[0]
+                if descriptions
+                else f'{work["title_zh"]}，{work["year"]}，{work["dimensions"]}。'
+            ),
             main=detail,
             root="../../",
             active="works",
@@ -515,7 +609,7 @@ def build() -> BuildReport:
     (DIST / "assets").mkdir(parents=True)
     shutil.copytree(ROOT / "static" / "css", DIST / "assets" / "css")
     shutil.copytree(ROOT / "static" / "js", DIST / "assets" / "js")
-    shutil.copytree(IMAGE_SOURCE, DIST / "assets" / "images")
+    (DIST / "assets" / "images").mkdir(parents=True)
     shutil.copy2(ROOT / "static" / "favicon.svg", DIST / "assets" / "favicon.svg")
     IMAGE_CATALOG, image_report = build_responsive_images(IMAGE_SOURCE, RESPONSIVE_OUTPUT)
 

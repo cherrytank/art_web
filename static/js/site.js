@@ -18,6 +18,7 @@ if (menuButton && siteNav) {
 }
 
 const workSearch = document.querySelector('[data-work-search]');
+const workSearchForm = document.querySelector('[data-work-search-form]');
 const workYear = document.querySelector('[data-work-year]');
 const workCards = [...document.querySelectorAll('.work-card')];
 
@@ -39,6 +40,10 @@ function filterWorks() {
 }
 
 workSearch?.addEventListener('input', filterWorks);
+workSearchForm?.addEventListener('submit', (event) => {
+  event.preventDefault();
+  filterWorks();
+});
 workYear?.addEventListener('change', filterWorks);
 
 const articleFilters = [...document.querySelectorAll('[data-article-filter]')];
@@ -55,6 +60,46 @@ articleFilters.forEach((button) => {
 });
 
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+document.querySelectorAll('[data-gallery]').forEach((gallery) => {
+  const track = gallery.querySelector('[data-gallery-track]');
+  const slides = track ? [...track.children] : [];
+  const current = gallery.querySelector('[data-gallery-current]');
+  const previous = gallery.querySelector('[data-gallery-prev]');
+  const next = gallery.querySelector('[data-gallery-next]');
+  if (!track || slides.length < 2) return;
+
+  let activeIndex = 0;
+  let scheduled = false;
+
+  const updateStatus = () => {
+    activeIndex = Math.max(0, Math.min(slides.length - 1, Math.round(track.scrollLeft / track.clientWidth)));
+    if (current) current.textContent = String(activeIndex + 1);
+    scheduled = false;
+  };
+
+  const show = (index) => {
+    const destination = (index + slides.length) % slides.length;
+    track.scrollTo({
+      left: destination * track.clientWidth,
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+    });
+  };
+
+  previous?.addEventListener('click', () => show(activeIndex - 1));
+  next?.addEventListener('click', () => show(activeIndex + 1));
+  track.addEventListener('scroll', () => {
+    if (!scheduled) {
+      scheduled = true;
+      window.requestAnimationFrame(updateStatus);
+    }
+  }, { passive: true });
+  gallery.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowLeft') show(activeIndex - 1);
+    if (event.key === 'ArrowRight') show(activeIndex + 1);
+  });
+});
+
 const revealSelector = [
   '.page-hero > div',
   '.page-hero > img',
@@ -62,6 +107,7 @@ const revealSelector = [
   '.about-portrait',
   '.about-timeline',
   '.philosophy > *',
+  '.statement-copy',
   '.catalog-tools',
   '.work-card',
   '.work-detail-grid > *',

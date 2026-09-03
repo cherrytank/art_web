@@ -66,7 +66,7 @@ class ImageBuildReport:
 
 def _candidate_widths(source_width: int) -> list[int]:
     widths = [width for width in RESPONSIVE_WIDTHS if width <= source_width]
-    if not widths or widths[-1] != source_width:
+    if not widths or (source_width < RESPONSIVE_WIDTHS[-1] and widths[-1] != source_width):
         widths.append(source_width)
     return widths
 

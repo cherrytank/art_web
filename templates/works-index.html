@@ -8,7 +8,9 @@
 </section>
 <section class="catalog page-section">
   <div class="catalog-tools">
-    <label class="search-field"><span>搜尋作品</span><input type="search" placeholder="作品名稱、年份或媒材" data-work-search></label>
+    <form class="work-search" data-work-search-form role="search">
+      <label class="search-field"><span>搜尋作品</span><span class="search-control"><input type="search" placeholder="作品名稱、編號或年份" data-work-search><button type="submit">搜尋</button></span></label>
+    </form>
     <label class="select-field"><span>年份</span><select data-work-year><option value="all">全部年份</option>{{year_options}}</select></label>
     <p class="result-count" aria-live="polite" data-work-count>{{work_count}} 件作品</p>
   </div>

@@ -103,7 +103,14 @@ class FormFields:
             self.row += 1
         return entry
 
-    def image_picker(self, label: str, variable: StringVar, required: bool = True) -> None:
+    def image_picker(
+        self,
+        label: str,
+        variable: StringVar,
+        required: bool = True,
+        *,
+        multiple: bool = False,
+    ) -> None:
         text = f"{label} *" if required else label
         ttk.Label(self.parent, text=text, style="FieldLabel.TLabel").grid(
             row=self.row, column=0, sticky="nw", padx=(0, 18), pady=(8, 3)
@@ -111,15 +118,20 @@ class FormFields:
         ttk.Entry(self.parent, textvariable=variable).grid(
             row=self.row, column=1, sticky="ew", pady=(4, 3)
         )
+        picker = self._choose_images if multiple else self._choose_image
         ttk.Button(
             self.parent,
-            text="選擇圖片…",
-            command=lambda: self._choose_image(variable),
+            text="選擇多張…" if multiple else "選擇圖片…",
+            command=lambda: picker(variable),
         ).grid(row=self.row, column=2, sticky="e", padx=(10, 0), pady=(4, 3))
         self.row += 1
         ttk.Label(
             self.parent,
-            text="支援 WebP、JPG、PNG、AVIF；儲存時會自動產生手機與桌面尺寸。",
+            text=(
+                "可一次複選多張局部圖；網站會自動做成左右滑動圖庫。"
+                if multiple
+                else "支援 WebP、JPG、PNG、AVIF；儲存時會自動產生手機與桌面尺寸。"
+            ),
             style="Hint.TLabel",
         ).grid(row=self.row, column=1, columnspan=2, sticky="w", pady=(0, 8))
         self.row += 1
@@ -180,6 +192,18 @@ class FormFields:
         if path:
             variable.set(path)
 
+    @staticmethod
+    def _choose_images(variable: StringVar) -> None:
+        paths = filedialog.askopenfilenames(
+            title="選擇局部圖片",
+            filetypes=[
+                ("網站圖片", "*.webp *.jpg *.jpeg *.png *.gif *.avif"),
+                ("所有檔案", "*.*"),
+            ],
+        )
+        if paths:
+            variable.set(" | ".join(paths))
+
 
 class WorkForm(ScrollableForm):
     def __init__(self, parent: ttk.Notebook, app: "ContentManager") -> None:
@@ -187,10 +211,12 @@ class WorkForm(ScrollableForm):
         self.app = app
         self.values = {
             "slug": StringVar(),
+            "catalog_number": StringVar(),
             "title_zh": StringVar(),
             "title_en": StringVar(),
             "year": StringVar(value=str(date.today().year)),
             "image": StringVar(),
+            "gallery": StringVar(),
             "alt": StringVar(),
             "medium_zh": StringVar(value="油彩、畫布"),
             "medium_en": StringVar(value="Oil on canvas"),
@@ -201,16 +227,22 @@ class WorkForm(ScrollableForm):
         fields = FormFields(self)
         fields.heading("新增作品", "填寫作品資料並選擇圖片。儲存後，作品列表與詳細頁會一起更新。")
         fields.entry("網址代稱", self.values["slug"], hint="可留白自動產生；若自行填寫，請使用英文小寫、數字與連字號。")
+        fields.entry("作品編號", self.values["catalog_number"], hint="例如：026021；可供作品頁搜尋。")
         fields.entry("作品中文名", self.values["title_zh"], required=True)
-        fields.entry("作品英文名", self.values["title_en"], hint="可留白，網站將暫時沿用中文名。")
+        fields.entry("作品英文名", self.values["title_en"], hint="沒有正式英文題名時可留白，網站不會自行翻譯。")
         fields.entry("年份", self.values["year"], required=True)
         fields.image_picker("作品圖片", self.values["image"])
+        fields.image_picker("局部圖片", self.values["gallery"], required=False, multiple=True)
         fields.entry("圖片說明", self.values["alt"], hint="提供給看不到圖片的使用者；可留白自動產生。")
         fields.entry("媒材（中文）", self.values["medium_zh"])
         fields.entry("媒材（英文）", self.values["medium_en"])
         fields.entry("尺寸", self.values["dimensions"], hint="例如：45 × 53 cm・10F")
         fields.entry("典藏資訊", self.values["collection"], hint="沒有可留白。")
-        self.description = fields.text("作品說明", required=True, height=6)
+        self.description = fields.text(
+            "作品說明",
+            height=6,
+            hint="文案尚未完成時可以留白，日後再補即可。",
+        )
         ttk.Checkbutton(self.body, text="設為精選作品", variable=self.featured).grid(
             row=fields.row, column=1, columnspan=2, sticky="w", pady=(8, 0)
         )
@@ -221,33 +253,42 @@ class WorkForm(ScrollableForm):
         title_zh = self.values["title_zh"].get().strip()
         image_path = self.values["image"].get().strip()
         description = self.description.get("1.0", "end").strip()
-        if not title_zh or not image_path or not description:
-            messagebox.showwarning("資料未完成", "請填寫作品中文名、作品圖片與作品說明。")
+        if not title_zh or not image_path:
+            messagebox.showwarning("資料未完成", "請填寫作品中文名並選擇作品圖片。")
             return
         if not valid_image(image_path):
+            return
+        gallery_paths = [
+            part.strip()
+            for part in self.values["gallery"].get().split("|")
+            if part.strip()
+        ]
+        if any(not valid_image(path) for path in gallery_paths):
             return
         slug = self.values["slug"].get().strip() or generated_slug("work")
         try:
             slug = add_content.validate_slug(slug)
             image = add_content.prepare_image(image_path)
+            gallery = [add_content.prepare_image(path) for path in gallery_paths]
         except SystemExit as error:
             messagebox.showerror("無法儲存", str(error))
             return
-        title_en = self.values["title_en"].get().strip() or title_zh
         record = {
             "kind": "work",
             "slug": slug,
+            "catalog_number": self.values["catalog_number"].get().strip(),
             "title_zh": title_zh,
-            "title_en": title_en,
+            "title_en": self.values["title_en"].get().strip(),
             "year": self.values["year"].get().strip() or str(date.today().year),
             "image": image,
+            "gallery": gallery,
             "alt": self.values["alt"].get().strip() or f"沈東榮油畫作品〈{title_zh}〉",
             "medium_zh": self.values["medium_zh"].get().strip() or "油彩、畫布",
             "medium_en": self.values["medium_en"].get().strip() or "Oil on canvas",
             "dimensions": self.values["dimensions"].get().strip() or "尺寸待補",
             "collection": self.values["collection"].get().strip(),
             "featured": bool(self.featured.get()),
-            "description": [description],
+            "description": [description] if description else [],
         }
         if save_record_with_confirmation("works", slug, record):
             self.app.finish_save(f"作品〈{title_zh}〉")

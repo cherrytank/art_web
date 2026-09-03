@@ -1,17 +1,18 @@
 <article class="work-detail page-section">
   <a class="back-link" href="{{root}}works/index.html">← 返回作品列表</a>
   <div class="work-detail-grid">
-    <figure>{{work_image}}</figure>
+    {{work_gallery}}
     <div class="work-detail-copy">
       <p class="section-kicker">{{year}}・Selected Work</p>
       <h1>{{title_zh}}</h1>
-      <p class="detail-title-en">{{title_en}}</p>
+      {{title_en_line}}
       <dl>
+        <div><dt>編號</dt><dd>{{catalog_number}}</dd></div>
         <div><dt>媒材</dt><dd>{{medium_zh}}<small>{{medium_en}}</small></dd></div>
         <div><dt>尺寸</dt><dd>{{dimensions}}</dd></div>
         {{collection_row}}
       </dl>
-      <div class="prose">{{description}}</div>
+      {{description_block}}
       <a class="outline-button" href="mailto:shentungjung.art@gmail.com?subject=Artwork%20Inquiry%20-%20{{slug}}">作品收藏洽詢 <span>→</span></a>
     </div>
   </div>

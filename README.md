@@ -18,7 +18,7 @@ python tools/content_manager.py
 
 管理介面有三個分頁：
 
-- **新增作品**：填寫作品名稱、年份、媒材、尺寸與說明，並用按鈕選擇圖片。
+- **新增作品**：填寫作品編號、名稱、年份、媒材與尺寸；主圖及多張局部圖都可用按鈕選擇，作品說明可稍後再補。
 - **新增文章**：填寫標題、分類、摘要與正文；段落之間空一行即可。
 - **網站維護**：重新最佳化全部圖片、產生網站、開啟本機預覽，或打開資料夾。
 
@@ -50,7 +50,7 @@ python tools/build_site.py
 python tools/add_content.py work
 ```
 
-程式會詢問網址代稱、作品名稱、年份、圖片、媒材、尺寸與說明，完成後建立 `content/works/<slug>.json`，並自動重建作品列表與詳細頁。
+程式會詢問網址代稱、作品編號、名稱、年份、主圖、局部圖、媒材、尺寸與說明，完成後建立 `content/works/<slug>.json`，並自動重建作品列表與詳細頁。多張局部圖請用 `|` 分隔；也可重複使用 `--gallery` 參數。
 
 圖片可以輸入完整路徑，程式會複製到 `static/assets/images/`；也可以先自行將圖片放入該資料夾，再輸入檔名。支援 WebP、JPG、PNG 與 AVIF，原圖可以保留較高解析度，建置流程會自動產生適合網站傳輸的版本。
 
@@ -58,11 +58,11 @@ python tools/add_content.py work
 
 不論使用 GUI、`add_content.py`、`build_site.py` 或 GitHub Pages 部署，都會執行同一套流程：
 
-- 為每張圖片產生最接近 `480`、`800`、`1200`、`1800` 像素的 WebP 版本，不會放大原圖。
+- 為每張圖片產生最接近 `480`、`800`、`1200`、`1800` 像素的 WebP 版本，不會放大原圖，也不會把超過網站顯示需求的 4K 原圖送到瀏覽器。
 - HTML 自動加入 `srcset`、`sizes`、`width`、`height` 與非同步解碼設定。
 - 首屏主圖優先下載；列表、文章列與頁面下方圖片延遲下載。
 - 社群分享圖使用約 1200px 的壓縮版本，不再直接傳送大型 PNG。
-- 原圖保留在 `static/assets/images/`，產生的版本只放在 `dist/assets/images/responsive/`，請勿手動編輯。
+- 原圖保留在 `static/assets/images/`，部署內容只使用 `dist/assets/images/responsive/` 的壓縮版本，請勿手動編輯 `dist/`。
 
 若只想從命令列執行完整圖片最佳化與建置，也可以使用：
 
@@ -112,7 +112,7 @@ python tools/add_content.py article `
 - 視覺樣式：`static/css/styles.css`
 - 行動選單與篩選：`static/js/site.js`
 
-目前原始的 `作品_文字檔.docx` 是 0 bytes 空檔，因此網站中的四件作品先依簡報所含圖片與可辨識欄位建立；其中標示「尺寸待補」的資料請在正式上線前更新。
+目前已依 `3_作品works/2026作品集.pptx` 收錄 20 件 2026 作品；`山行` 與 `荷塘春色` 的局部圖會在詳細頁形成可觸控左右滑動的圖庫。未提供的英文題名與作品文案保持留白，可日後透過管理視窗補入。
 
 ## GitHub Pages 部署
 

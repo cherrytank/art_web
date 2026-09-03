@@ -1,6 +1,9 @@
 <section class="about-hero page-section dark-surface">
   <div class="about-intro">
-    <p class="section-kicker">學經歷・創作理念・藝術經歷</p>
+    <nav class="about-switcher" aria-label="關於沈東榮">
+      <a href="{{education_url}}" aria-current="page">學經歷</a>
+      <a href="{{philosophy_url}}">創作理念</a>
+    </nav>
     <h1>學經歷<small>Education &amp;<br>Experience</small></h1>
     <div class="short-rule"></div>
     <p>{{intro_zh}}</p>
@@ -16,11 +19,4 @@
     <h2>現任 <small>Current Position</small></h2>
     <p>{{current}}</p>
   </div>
-</section>
-<section class="philosophy page-section">
-  <div>
-    <p class="section-kicker">Artist Statement</p>
-    <h2>創作理念</h2>
-  </div>
-  <p>{{philosophy}}</p>
 </section>

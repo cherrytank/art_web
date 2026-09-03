@@ -109,10 +109,16 @@ def add_article(args: argparse.Namespace) -> Path:
 
 def add_work(args: argparse.Namespace) -> Path:
     slug = validate_slug(ask(args.slug, "網址代稱 slug"))
+    catalog_number = ask(args.catalog_number, "作品編號（可留白）")
     title_zh = ask(args.title_zh, "作品中文名")
     title_en = ask(args.title_en, "作品英文名")
     year = ask(args.year, "年份", str(date.today().year))
     image = prepare_image(ask(args.image, "作品圖片檔名或完整路徑"))
+    gallery_values = args.gallery or []
+    if not gallery_values:
+        raw_gallery = ask(None, "局部圖片（多張請用 | 分隔，可留白）")
+        gallery_values = [part.strip() for part in raw_gallery.split("|") if part.strip()]
+    gallery = [prepare_image(value) for value in gallery_values]
     alt = ask(args.alt, "圖片替代文字")
     medium_zh = ask(args.medium_zh, "媒材（中文）", "油彩、畫布")
     medium_en = ask(args.medium_en, "媒材（英文）", "Oil on canvas")
@@ -122,17 +128,19 @@ def add_work(args: argparse.Namespace) -> Path:
     record = {
         "kind": "work",
         "slug": slug,
+        "catalog_number": catalog_number,
         "title_zh": title_zh,
         "title_en": title_en,
         "year": year,
         "image": image,
+        "gallery": gallery,
         "alt": alt,
         "medium_zh": medium_zh,
         "medium_en": medium_en,
         "dimensions": dimensions,
         "collection": collection,
         "featured": bool(args.featured),
-        "description": [description],
+        "description": [description] if description else [],
     }
     return save_record("works", slug, record, args.force)
 
@@ -158,6 +166,7 @@ def create_parser() -> argparse.ArgumentParser:
 
     work = subparsers.add_parser("work", help="新增作品")
     add_common_flags(work)
+    work.add_argument("--catalog-number")
     work.add_argument("--title-zh")
     work.add_argument("--title-en")
     work.add_argument("--year")
@@ -167,6 +176,7 @@ def create_parser() -> argparse.ArgumentParser:
     work.add_argument("--dimensions")
     work.add_argument("--collection")
     work.add_argument("--description")
+    work.add_argument("--gallery", action="append", help="可重複使用以加入多張局部圖片")
     work.add_argument("--featured", action="store_true")
 
     subparsers.add_parser("build", help="最佳化所有圖片並重建 HTML")
