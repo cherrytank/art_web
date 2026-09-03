@@ -298,13 +298,10 @@ def work_card(work: dict[str, Any], root: str) -> str:
         if work.get("collection")
         else ""
     )
-    image_asset = IMAGE_CATALOG[work["image"]]
-    artwork_ratio = f"{image_asset.width} / {image_asset.height}"
     return (
         f'<article class="work-card" data-year="{escape(work["year"])}" '
         f'data-search="{escape(search)}"><a href="{root}works/{escape(work["slug"])}/index.html">'
-        f'<div class="work-image" style="--artwork-ratio: {artwork_ratio}">'
-        f'{responsive_image(work["image"], work["alt"], root, CARD_IMAGE_SIZES)}</div>'
+        f'<div class="work-image">{responsive_image(work["image"], work["alt"], root, CARD_IMAGE_SIZES)}</div>'
         '<div class="work-meta"><div class="work-primary">'
         f'<h2><span class="work-number">{escape(work.get("catalog_number", ""))}</span>'
         f'<span class="work-title">{escape(work["title_zh"])}</span></h2>'
