@@ -1,4 +1,4 @@
-"""Validate generated HTML, local links, images, titles, and page headings."""
+"""Validate generated HTML, local links, images, lightboxes, and page headings."""
 
 from __future__ import annotations
 
@@ -40,6 +40,8 @@ class PageParser(HTMLParser):
                 url = candidate.strip().split(" ", 1)[0]
                 if url:
                     self.links.append(url)
+            if values.get("data-lightbox-src"):
+                self.links.append(values["data-lightbox-src"] or "")
         if tag == "h1":
             self.h1_count += 1
         if tag == "title":
@@ -105,8 +107,8 @@ def main() -> None:
         print("\n".join(errors), file=sys.stderr)
         raise SystemExit(1)
     print(
-        f"Validated {len(pages)} HTML pages: links, responsive images, dimensions, "
-        "titles, h1, and alt text are valid."
+        f"Validated {len(pages)} HTML pages: links, responsive images, lightboxes, "
+        "dimensions, titles, h1, and alt text are valid."
     )
 
 

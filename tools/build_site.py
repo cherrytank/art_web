@@ -58,6 +58,7 @@ def responsive_image(
     *,
     css_class: str = "",
     priority: bool = False,
+    lightbox: bool = False,
 ) -> str:
     """Render an image that lets each device choose an appropriate width."""
     try:
@@ -85,6 +86,19 @@ def responsive_image(
         attributes.append(f'class="{escape(css_class)}"')
     if priority:
         attributes.append('fetchpriority="high"')
+    if lightbox:
+        enlarged = asset.preferred(1800)
+        lightbox_label = escape(f"放大圖片：{alt}")
+        attributes.extend(
+            [
+                f'data-lightbox-src="{image_root}{enlarged.filename}"',
+                'tabindex="0"',
+                'role="button"',
+                'aria-haspopup="dialog"',
+                'aria-controls="image-lightbox"',
+                f'aria-label="{lightbox_label}"',
+            ]
+        )
     return "<img " + " ".join(attributes) + ">"
 
 
@@ -181,6 +195,7 @@ def build_home(site: dict[str, Any]) -> None:
             "",
             HERO_IMAGE_SIZES,
             priority=True,
+            lightbox=True,
         ),
         home_signature=responsive_image(
             "signature.webp",
@@ -231,6 +246,7 @@ def build_about(site: dict[str, Any]) -> None:
             "../",
             DETAIL_IMAGE_SIZES,
             priority=True,
+            lightbox=True,
         ),
         intro_zh=escape(data["intro_zh"]),
         intro_en=escape(data["intro_en"]),
@@ -259,6 +275,7 @@ def build_about(site: dict[str, Any]) -> None:
             "../../",
             DETAIL_IMAGE_SIZES,
             priority=True,
+            lightbox=True,
         ),
         intro_zh=escape(data["intro_zh"]),
         intro_en=escape(data["intro_en"]),
@@ -323,6 +340,7 @@ def work_gallery(work: dict[str, Any], root: str) -> str:
                 root,
                 DETAIL_IMAGE_SIZES,
                 priority=True,
+                lightbox=True,
             )
             + "</figure>"
         )
@@ -338,6 +356,7 @@ def work_gallery(work: dict[str, Any], root: str) -> str:
                 root,
                 DETAIL_IMAGE_SIZES,
                 priority=index == 0,
+                lightbox=True,
             )
             + "</figure>"
         )
@@ -367,6 +386,7 @@ def build_works(site: dict[str, Any], works: list[dict[str, Any]]) -> None:
             "../",
             HERO_IMAGE_SIZES,
             priority=True,
+            lightbox=True,
         ),
         year_options=year_options,
         work_count=len(works),
@@ -495,6 +515,7 @@ def build_exhibitions(
             "../",
             HERO_IMAGE_SIZES,
             priority=True,
+            lightbox=True,
         ),
         current_exhibitions=current_exhibitions,
         exhibitions=rows,
@@ -526,6 +547,7 @@ def build_exhibitions(
                 f'{detail_data["title_zh"]}展場現場照片 {photo_index}',
                 "../../",
                 "(max-width: 760px) 100vw, 42vw",
+                lightbox=True,
             )
             + "</figure>"
             for photo_index, filename in enumerate(detail_data.get("gallery", []), start=1)
@@ -555,12 +577,14 @@ def build_exhibitions(
                 "../../",
                 "(max-width: 760px) 100vw, 64vw",
                 priority=True,
+                lightbox=True,
             ),
             poster_image=responsive_image(
                 detail_data["poster_image"],
                 detail_data["poster_alt"],
                 "../../",
                 "(max-width: 760px) 100vw, 28vw",
+                lightbox=True,
             ),
             introduction=introduction,
             gallery=gallery,
@@ -596,12 +620,14 @@ def build_classes(site: dict[str, Any]) -> None:
             "../",
             "100vw",
             priority=True,
+            lightbox=True,
         ),
         course_image=responsive_image(
             "work-white-flower.webp",
             "白花與藍色花器的油畫示範作品",
             "../",
             DETAIL_IMAGE_SIZES,
+            lightbox=True,
         ),
         title=escape(data["title"]),
         intro=escape(data["intro"]),
@@ -631,7 +657,7 @@ def article_row(article: dict[str, Any], root: str) -> str:
         f'<time datetime="{escape(article["date"])}">{date_display(article["date"])}</time>'
         f'<div><h2>{escape(article["title"])}</h2><p>{escape(article["category_en"])}・'
         f'{escape(article["category_zh"])}</p></div>'
-        f'{responsive_image(article["image"], article["image_alt"], root, ARTICLE_THUMB_SIZES)}'
+        f'{responsive_image(article["image"], article["image_alt"], root, ARTICLE_THUMB_SIZES, lightbox=True)}'
         f'<a href="{root}writings/{escape(article["slug"])}/index.html">Read article →</a></article>'
     )
 
@@ -665,6 +691,7 @@ def build_writings(site: dict[str, Any], articles: list[dict[str, Any]]) -> None
             "../",
             HERO_IMAGE_SIZES,
             priority=True,
+            lightbox=True,
         ),
         articles="".join(article_row(article, "../") for article in articles),
     )
@@ -695,6 +722,7 @@ def build_writings(site: dict[str, Any], articles: list[dict[str, Any]]) -> None
                 "../../",
                 DETAIL_IMAGE_SIZES,
                 priority=True,
+                lightbox=True,
             ),
             body=render_article_blocks(article["body"]),
         )

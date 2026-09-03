@@ -100,6 +100,50 @@ document.querySelectorAll('[data-gallery]').forEach((gallery) => {
   });
 });
 
+const lightboxDialog = document.querySelector('[data-lightbox-dialog]');
+const lightboxMedia = lightboxDialog?.querySelector('[data-lightbox-media]');
+const lightboxCaption = lightboxDialog?.querySelector('[data-lightbox-caption]');
+const lightboxClose = lightboxDialog?.querySelector('[data-lightbox-close]');
+let activeLightboxTrigger = null;
+
+function closeLightbox() {
+  if (lightboxDialog?.open) lightboxDialog.close();
+}
+
+function openLightbox(trigger) {
+  if (!lightboxDialog || !lightboxMedia || !lightboxCaption) return;
+  activeLightboxTrigger = trigger;
+  const enlargedImage = document.createElement('img');
+  enlargedImage.className = 'image-lightbox-image';
+  enlargedImage.src = trigger.dataset.lightboxSrc;
+  enlargedImage.alt = trigger.alt || '';
+  lightboxMedia.replaceChildren(enlargedImage);
+  lightboxCaption.textContent = trigger.alt || '';
+  document.body.classList.add('lightbox-open');
+  lightboxDialog.showModal();
+  lightboxClose?.focus();
+}
+
+document.querySelectorAll('img[data-lightbox-src]').forEach((image) => {
+  image.addEventListener('click', () => openLightbox(image));
+  image.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    openLightbox(image);
+  });
+});
+
+lightboxClose?.addEventListener('click', closeLightbox);
+lightboxDialog?.addEventListener('click', (event) => {
+  if (event.target === lightboxDialog) closeLightbox();
+});
+lightboxDialog?.addEventListener('close', () => {
+  document.body.classList.remove('lightbox-open');
+  lightboxMedia?.replaceChildren();
+  activeLightboxTrigger?.focus();
+  activeLightboxTrigger = null;
+});
+
 const revealSelector = [
   '.page-hero > div',
   '.page-hero > img',
