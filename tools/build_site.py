@@ -285,20 +285,29 @@ def work_card(work: dict[str, Any], root: str) -> str:
             "year",
             "medium_zh",
             "dimensions",
+            "collection",
         )
     ).lower()
     title_en = (
-        f'<small>{escape(work["title_en"])}</small>'
+        f'<p class="work-title-en">{escape(work["title_en"])}</p>'
         if work.get("title_en")
+        else ""
+    )
+    collection = (
+        f'<p class="work-collection">{escape(work["collection"])}</p>'
+        if work.get("collection")
         else ""
     )
     return (
         f'<article class="work-card" data-year="{escape(work["year"])}" '
         f'data-search="{escape(search)}"><a href="{root}works/{escape(work["slug"])}/index.html">'
         f'<div class="work-image">{responsive_image(work["image"], work["alt"], root, CARD_IMAGE_SIZES)}</div>'
-        f'<div class="work-meta"><h2>{escape(work["title_zh"])}{title_en}</h2>'
-        f'<p>{escape(work.get("catalog_number", ""))}<br>{escape(work["year"])}<br>'
-        f'{escape(work["dimensions"])}</p></div></a></article>'
+        '<div class="work-meta"><div class="work-primary">'
+        f'<h2><span class="work-number">{escape(work.get("catalog_number", ""))}</span>'
+        f'<span class="work-title">{escape(work["title_zh"])}</span></h2>'
+        f'<time datetime="{escape(work["year"])}">{escape(work["year"])}</time></div>'
+        f'{title_en}<p class="work-dimensions">{escape(work["dimensions"])}</p>'
+        f'{collection}</div></a></article>'
     )
 
 

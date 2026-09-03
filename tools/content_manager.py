@@ -310,6 +310,8 @@ class ExhibitionForm(ScrollableForm):
     def __init__(self, parent: ttk.Notebook, app: "ContentManager") -> None:
         super().__init__(parent)
         self.app = app
+        self.current_selection = StringVar()
+        self.current_choice_keys: dict[str, str] = {}
         self.values = {
             "slug": StringVar(),
             "year": StringVar(value=str(date.today().year)),
@@ -332,6 +334,33 @@ class ExhibitionForm(ScrollableForm):
             "新增展覽",
             "填寫展覽資訊、選擇主視覺與現場照片；儲存後會同時更新展覽列表與詳細頁。",
         )
+        ttk.Label(self.body, text="指定當期展覽", style="FieldLabel.TLabel").grid(
+            row=fields.row, column=0, sticky="nw", padx=(0, 18), pady=(8, 3)
+        )
+        current_box = ttk.Frame(self.body)
+        current_box.grid(row=fields.row, column=1, columnspan=2, sticky="ew", pady=(4, 3))
+        current_box.columnconfigure(0, weight=1)
+        self.current_selector = ttk.Combobox(
+            current_box,
+            textvariable=self.current_selection,
+            state="readonly",
+        )
+        self.current_selector.grid(row=0, column=0, sticky="ew")
+        ttk.Button(
+            current_box,
+            text="設為當期",
+            command=self.set_current_exhibition,
+        ).grid(row=0, column=1, padx=(10, 0))
+        fields.row += 1
+        ttk.Label(
+            self.body,
+            text="可從所有既有展覽中選擇；設定後會自動取消前一個當期展覽。",
+            style="Hint.TLabel",
+            wraplength=580,
+        ).grid(row=fields.row, column=1, columnspan=2, sticky="w", pady=(0, 16))
+        fields.row += 1
+        self.refresh_current_choices()
+
         fields.entry("網址代稱", self.values["slug"], hint="可留白自動產生；若自行填寫，請使用英文小寫、數字與連字號。")
         fields.entry("年份", self.values["year"], required=True)
         fields.entry("展覽名稱", self.values["title_zh"], required=True)
@@ -472,7 +501,53 @@ class ExhibitionForm(ScrollableForm):
             encoding="utf-8",
         )
         self.app.finish_save(f"展覽《{title_zh}》")
+        self.refresh_current_choices()
         self.reset()
+
+    def refresh_current_choices(self) -> None:
+        summary_path = ROOT / "content" / "exhibitions.json"
+        summaries = json.loads(summary_path.read_text(encoding="utf-8"))
+        self.current_choice_keys.clear()
+        selected_label = ""
+        labels: list[str] = []
+        for index, item in enumerate(summaries):
+            base_label = f'{item.get("year", "")}｜{item.get("title", "")}｜{item.get("venue", "")}'
+            label = f"{base_label}（目前）" if item.get("current") else base_label
+            if label in self.current_choice_keys:
+                label = f"{label} #{index + 1}"
+            key = exhibition_key(item)
+            labels.append(label)
+            self.current_choice_keys[label] = key
+            if item.get("current"):
+                selected_label = label
+        self.current_selector.configure(values=labels)
+        self.current_selection.set(selected_label or (labels[0] if labels else ""))
+
+    def set_current_exhibition(self) -> None:
+        label = self.current_selection.get()
+        selected_key = self.current_choice_keys.get(label)
+        if not selected_key:
+            messagebox.showwarning("尚未選擇展覽", "請先從清單選擇一個當期展覽。")
+            return
+
+        summary_path = ROOT / "content" / "exhibitions.json"
+        summaries = json.loads(summary_path.read_text(encoding="utf-8"))
+        selected_title = ""
+        for item in summaries:
+            item.pop("current", None)
+            if exhibition_key(item) == selected_key:
+                item["current"] = True
+                selected_title = str(item.get("title", ""))
+        if not selected_title:
+            messagebox.showerror("設定失敗", "找不到所選展覽，請重新開啟管理介面後再試一次。")
+            return
+
+        summary_path.write_text(
+            json.dumps(summaries, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        self.refresh_current_choices()
+        self.app.finish_save(f"當期展覽《{selected_title}》")
 
     def reset(self) -> None:
         for variable in self.values.values():
@@ -708,6 +783,20 @@ class ContentManager(Tk):
 
 def generated_slug(prefix: str) -> str:
     return f"{prefix}-{datetime.now():%Y%m%d-%H%M%S}"
+
+
+def exhibition_key(item: dict) -> str:
+    """Return a stable identifier for both detailed and legacy exhibition rows."""
+    slug = str(item.get("slug", "")).strip()
+    if slug:
+        return f"slug:{slug}"
+    legacy_parts = (
+        str(item.get("year", "")),
+        str(item.get("title", "")),
+        str(item.get("venue", "")),
+        str(item.get("city", "")),
+    )
+    return "legacy:" + "|".join(legacy_parts)
 
 
 def build_summary(report: build_site.BuildReport) -> str:
