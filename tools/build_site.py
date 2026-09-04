@@ -195,7 +195,6 @@ def build_home(site: dict[str, Any]) -> None:
             "",
             HERO_IMAGE_SIZES,
             priority=True,
-            lightbox=True,
         ),
         home_signature=responsive_image(
             "signature.webp",
@@ -246,7 +245,6 @@ def build_about(site: dict[str, Any]) -> None:
             "../",
             DETAIL_IMAGE_SIZES,
             priority=True,
-            lightbox=True,
         ),
         intro_zh=escape(data["intro_zh"]),
         intro_en=escape(data["intro_en"]),
@@ -275,7 +273,6 @@ def build_about(site: dict[str, Any]) -> None:
             "../../",
             DETAIL_IMAGE_SIZES,
             priority=True,
-            lightbox=True,
         ),
         intro_zh=escape(data["intro_zh"]),
         intro_en=escape(data["intro_en"]),
@@ -427,7 +424,6 @@ def build_works(site: dict[str, Any], works: list[dict[str, Any]]) -> None:
             dimensions=escape(work["dimensions"]),
             collection_row=collection_row,
             description_block=(f'<div class="prose">{description}</div>' if description else ""),
-            slug=escape(work["slug"]),
         )
         write_page(
             f"works/{work['slug']}/index.html",
@@ -620,14 +616,12 @@ def build_classes(site: dict[str, Any]) -> None:
             "../",
             "100vw",
             priority=True,
-            lightbox=True,
         ),
         course_image=responsive_image(
             "work-white-flower.webp",
             "白花與藍色花器的油畫示範作品",
             "../",
             DETAIL_IMAGE_SIZES,
-            lightbox=True,
         ),
         title=escape(data["title"]),
         intro=escape(data["intro"]),

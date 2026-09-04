@@ -233,7 +233,8 @@ a.current-exhibition-card:focus-visible { outline: 2px solid var(--accent); outl
 .exhibition-row p { margin: 0; color: var(--muted); font-size: .85rem; }
 
 .exhibition-detail-hero { display: grid; grid-template-columns: minmax(280px, .65fr) minmax(0, 1.45fr); gap: clamp(36px, 6vw, 90px); align-items: center; }
-.exhibition-detail-intro h1 { margin: 0; font-size: clamp(2.7rem, 5vw, 5.5rem); font-weight: 400; line-height: 1; white-space: nowrap; }
+.exhibition-detail-intro { min-width: 0; }
+.exhibition-detail-intro h1 { margin: 0; font-size: clamp(2.3rem, 4.6vw, 4.8rem); font-weight: 400; line-height: 1.08; white-space: normal; overflow-wrap: anywhere; text-wrap: balance; }
 .exhibition-title-en { margin: 12px 0 0; color: var(--accent); font-size: 1rem; font-style: italic; }
 .exhibition-subtitle { color: var(--ink); line-height: 1.7; }
 .exhibition-detail-intro > p:not(.section-kicker, .exhibition-title-en) { color: var(--muted); line-height: 1.7; }
@@ -317,17 +318,18 @@ a.current-exhibition-card:focus-visible { outline: 2px solid var(--accent); outl
 
 .contact-page { min-height: 720px; position: relative; overflow: hidden; }
 .contact-page::after { content: ""; position: absolute; right: -12%; bottom: -34%; width: 68%; height: 70%; border-radius: 50%; background: radial-gradient(ellipse, rgba(140,121,99,.13), transparent 67%); pointer-events: none; }
-.contact-intro { display: grid; grid-template-columns: 260px 1fr; gap: 40px; align-items: end; }
+.contact-intro { display: grid; grid-template-columns: minmax(320px, .85fr) minmax(0, 1fr); gap: clamp(32px, 5vw, 72px); align-items: end; }
+.contact-intro > * { min-width: 0; }
 .contact-intro .section-kicker { grid-column: 1; }
-.contact-intro h1 { grid-column: 1; margin: 0; font-size: clamp(3rem, 7vw, 6.5rem); font-weight: 400; line-height: .95; white-space: nowrap; }
-.contact-intro > p:last-child { grid-column: 2; grid-row: 1 / 3; max-width: 520px; margin: 0; align-self: end; line-height: 1.9; letter-spacing: .08em; }
+.contact-intro h1 { grid-column: 1; margin: 0; font-size: clamp(3rem, 6vw, 5.4rem); font-weight: 400; line-height: 1; white-space: nowrap; }
+.contact-intro > p:last-child { grid-column: 2; grid-row: 1 / 3; max-width: 520px; margin: 0; align-self: end; line-height: 1.9; letter-spacing: .08em; overflow-wrap: anywhere; }
 .contact-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 70px; }
-.contact-links a { display: grid; grid-template-columns: 1fr auto; padding: 26px 0; border-top: 1px solid var(--line); text-decoration: none; }
+.contact-links a { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; padding: 26px 0; border-top: 1px solid var(--line); text-decoration: none; }
 .contact-links small { grid-column: 1; color: var(--muted); }
-.contact-links strong { grid-column: 1; margin-top: 8px; font-size: 1.1rem; font-weight: 400; }
+.contact-links strong { min-width: 0; grid-column: 1; margin-top: 8px; font-size: 1.1rem; font-weight: 400; overflow-wrap: anywhere; }
 .contact-links span { grid-column: 2; grid-row: 1 / 3; align-self: center; }
-.inquiry-grid { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 70px; border-block: 1px solid var(--line); }
-.inquiry-grid a { display: grid; grid-template-columns: 1fr auto; gap: 5px; padding: 28px; border-right: 1px solid var(--line); text-decoration: none; }
+.inquiry-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 70px; border-block: 1px solid var(--line); }
+.inquiry-grid a { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px; padding: 28px; border-right: 1px solid var(--line); text-decoration: none; }
 .inquiry-grid a:last-child { border: 0; }
 .inquiry-grid strong, .inquiry-grid small { grid-column: 1; }
 .inquiry-grid strong { font-weight: 400; }
@@ -476,6 +478,7 @@ a.current-exhibition-card:focus-visible { outline: 2px solid var(--accent); outl
   .article-body { margin-top: 45px; }
   .contact-intro { grid-template-columns: 1fr; gap: 20px; }
   .contact-intro .section-kicker, .contact-intro h1, .contact-intro > p:last-child { grid-column: 1; grid-row: auto; }
+  .contact-intro h1 { font-size: clamp(3rem, 15vw, 4.6rem); white-space: normal; }
   .contact-links { grid-template-columns: 1fr; margin-top: 45px; }
   .inquiry-grid { grid-template-columns: 1fr; }
   .inquiry-grid a { border-right: 0; border-bottom: 1px solid var(--line); }
