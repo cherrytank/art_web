@@ -117,6 +117,8 @@ function openLightbox(trigger) {
   enlargedImage.className = 'image-lightbox-image';
   enlargedImage.src = trigger.dataset.lightboxSrc;
   enlargedImage.alt = trigger.alt || '';
+  enlargedImage.title = '點擊關閉';
+  enlargedImage.addEventListener('click', closeLightbox);
   lightboxMedia.replaceChildren(enlargedImage);
   lightboxCaption.textContent = trigger.alt || '';
   document.body.classList.add('lightbox-open');
