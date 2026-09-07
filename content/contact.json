@@ -1,6 +1,11 @@
 {
   "email": "shentungjung.art@gmail.com",
-  "instagram_handle": "@shen_tung_jung",
-  "instagram_url": "https://www.instagram.com/shen_tung_jung/",
-  "intro": "關於作品收藏、展覽合作、油畫課程與其他邀約，歡迎來信聯繫。"
+  "official_url": "https://www.instagram.com/homeforpainting.art/",
+  "intro": "關於作品收藏、展覽合作、油畫課程及其他相關邀約，歡迎透過以下方式與我們聯繫。",
+  "social_links": [
+    {"owner": "官方帳號 Official Account", "platform": "Instagram", "handle": "@homeforpainting.art", "url": "https://www.instagram.com/homeforpainting.art/", "image": "contact-official-instagram.jpg"},
+    {"owner": "官方帳號 Official Account", "platform": "Threads", "handle": "@homeforpainting.art", "url": "https://www.threads.com/@homeforpainting.art", "image": "contact-threads.jpg"},
+    {"owner": "沈東榮", "platform": "Facebook", "handle": "沈東榮", "url": "https://hqr.la/6c9210e6", "image": "contact-facebook.png"},
+    {"owner": "沈東榮", "platform": "Instagram", "handle": "@laurent_shen_", "url": "https://www.instagram.com/laurent_shen_/", "image": "contact-artist-instagram.jpg"}
+  ]
 }

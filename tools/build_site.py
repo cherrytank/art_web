@@ -50,6 +50,17 @@ def escape(value: object) -> str:
     return html.escape(str(value), quote=True)
 
 
+def display_title(record: dict[str, Any]) -> str:
+    """Optional editorial line breaks; never allow content to inject HTML."""
+    lines = record.get("title_lines") or [record["title"]]
+    return "<br>".join(escape(line) for line in lines)
+
+
+def collection_label(work: dict[str, Any]) -> str:
+    """Publish status only, including search text; collector names stay private."""
+    return "已收藏" if work.get("collection") else ""
+
+
 def responsive_image(
     filename: str,
     alt: str,
@@ -189,6 +200,8 @@ def write_page(
 def build_home(site: dict[str, Any]) -> None:
     main = render(
         read_text(TEMPLATES / "home.html"),
+        intro=escape(site["home_intro"]),
+        intro_en=escape(site["home_intro_en"]),
         home_image=responsive_image(
             "artist-working.webp",
             "油畫藝術家沈東榮於工作室創作",
@@ -197,7 +210,7 @@ def build_home(site: dict[str, Any]) -> None:
             priority=True,
         ),
         home_signature=responsive_image(
-            "signature.webp",
+            "signature-0906.png",
             "沈東榮簽名",
             "",
             "(max-width: 760px) 38vw, 230px",
@@ -299,16 +312,15 @@ def work_card(work: dict[str, Any], root: str) -> str:
             "year",
             "medium_zh",
             "dimensions",
-            "collection",
         )
-    ).lower()
+    ).lower() + " " + collection_label(work)
     title_en = (
         f'<p class="work-title-en">{escape(work["title_en"])}</p>'
         if work.get("title_en")
         else ""
     )
     collection = (
-        f'<p class="work-collection">{escape(work["collection"])}</p>'
+        f'<p class="work-collection">{collection_label(work)}</p>'
         if work.get("collection")
         else ""
     )
@@ -377,6 +389,7 @@ def build_works(site: dict[str, Any], works: list[dict[str, Any]]) -> None:
     main = render(
         read_text(TEMPLATES / "works-index.html"),
         root="../",
+        intro=escape(load_json(CONTENT / "page_copy.json")["works_intro"]),
         hero_image=responsive_image(
             "artist-working.webp",
             "沈東榮於工作室創作",
@@ -403,7 +416,7 @@ def build_works(site: dict[str, Any], works: list[dict[str, Any]]) -> None:
     for work in works:
         collection_row = ""
         if work.get("collection"):
-            collection_row = f'<div><dt>典藏</dt><dd>{escape(work["collection"])}</dd></div>'
+            collection_row = '<div><dt>典藏</dt><dd>已收藏</dd></div>'
         descriptions = work.get("description", [])
         description = "".join(f"<p>{escape(text)}</p>" for text in descriptions)
         title_en_line = (
@@ -505,9 +518,10 @@ def build_exhibitions(
     main = render(
         read_text(TEMPLATES / "exhibitions.html"),
         root="../",
+        intro=escape(load_json(CONTENT / "page_copy.json")["exhibitions_intro"]),
         hero_image=responsive_image(
-            "work-026020.jpg",
-            "凝翠・出岫展覽主視覺〈荷塘春色〉",
+            "exhibitions-cover-0907.png",
+            "沈東榮展覽資訊主視覺",
             "../",
             HERO_IMAGE_SIZES,
             priority=True,
@@ -604,22 +618,22 @@ def build_classes(site: dict[str, Any]) -> None:
     data = load_json(CONTENT / "classes.json")
     schedule = "".join(f"<span>{escape(item)}</span>" for item in data["schedule"])
     features = "".join(
-        f'<li><h3>{escape(item["title"])}</h3><p>{escape(item["text"])}</p></li>'
-        for item in data["features"]
+        f'<li>{course_icon(index)}<h3>{escape(item["title"])}</h3><p>{escape(item["text"])}</p></li>'
+        for index, item in enumerate(data["features"])
     )
     main = render(
         read_text(TEMPLATES / "classes.html"),
         root="../",
         hero_image=responsive_image(
-            "artist-studio.webp",
-            "沈東榮於工作室進行油畫創作",
+            "classes-cover-0907.png",
+            "油畫調色盤與畫筆，油畫教學封面",
             "../",
             "100vw",
             priority=True,
         ),
         course_image=responsive_image(
-            "work-white-flower.webp",
-            "白花與藍色花器的油畫示範作品",
+            "classes-detail-0907.png",
+            "畫筆與花卉油畫，油畫課程示意",
             "../",
             DETAIL_IMAGE_SIZES,
         ),
@@ -643,6 +657,17 @@ def build_classes(site: dict[str, Any]) -> None:
 
 def date_display(value: str) -> str:
     return datetime.strptime(value, "%Y-%m-%d").strftime("%Y.%m.%d")
+
+
+def course_icon(index: int) -> str:
+    """Small decorative line icons: observation, palette, time, finished work."""
+    paths = (
+        '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+        '<path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1-4 2 2 0 0 1 1-4h3a3 3 0 0 0 3-3c0-4-4-7-9-7Z"/><circle cx="7" cy="10" r="1"/><circle cx="11" cy="7" r="1"/><circle cx="16" cy="8" r="1"/>',
+        '<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>',
+        '<path d="M4 3h16v18H4Z M7 16l4-5 3 3 3-4"/><circle cx="8" cy="7" r="1"/>',
+    )
+    return '<svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' + paths[index % len(paths)] + '</svg>'
 
 
 def article_row(article: dict[str, Any], root: str) -> str:
@@ -679,6 +704,8 @@ def build_writings(site: dict[str, Any], articles: list[dict[str, Any]]) -> None
     main = render(
         read_text(TEMPLATES / "writings-index.html"),
         root="../",
+        intro=escape(load_json(CONTENT / "page_copy.json")["writings_intro"]),
+        quote=escape(load_json(CONTENT / "page_copy.json")["writings_quote"]),
         hero_image=responsive_image(
             "work-yushan.webp",
             "夕陽映照山峰與秋色山林的油畫作品",
@@ -691,7 +718,7 @@ def build_writings(site: dict[str, Any], articles: list[dict[str, Any]]) -> None
     )
     write_page(
         "writings/index.html",
-        title=f"藝評・文章｜{site['name_zh']}",
+        title=f"藝評．文章｜{site['name_zh']}",
         description="沈東榮的藝術評論、創作筆記與作品故事。",
         main=main,
         root="../",
@@ -708,7 +735,7 @@ def build_writings(site: dict[str, Any], articles: list[dict[str, Any]]) -> None
             date_display=date_display(article["date"]),
             category_zh=escape(article["category_zh"]),
             category_en=escape(article["category_en"]),
-            title=escape(article["title"]),
+            display_title=display_title(article),
             summary=escape(article["summary"]),
             article_image=responsive_image(
                 article["image"],
@@ -734,11 +761,18 @@ def build_writings(site: dict[str, Any], articles: list[dict[str, Any]]) -> None
 
 def build_contact(site: dict[str, Any]) -> None:
     data = load_json(CONTENT / "contact.json")
+    social_cards = "".join(
+        f'<a class="social-card" href="{escape(item["url"])}" target="_blank" rel="noopener noreferrer">'
+        f'<div><small>{escape(item["owner"])}</small><h3>{escape(item["platform"])}</h3>'
+        f'<p>{escape(item["handle"])}</p><span>前往帳號 ↗</span></div>'
+        + responsive_image(item["image"], f'{item["owner"]} {item["platform"]} QR code', "../", "240px")
+        + '</a>' for item in data["social_links"]
+    )
     main = render(
         read_text(TEMPLATES / "contact.html"),
         root="../",
         signature_image=responsive_image(
-            "signature.webp",
+            "signature-0906.png",
             "沈東榮簽名",
             "../",
             "(max-width: 760px) 45vw, 330px",
@@ -746,8 +780,9 @@ def build_contact(site: dict[str, Any]) -> None:
         ),
         intro=escape(data["intro"]),
         email=escape(data["email"]),
-        instagram_url=escape(data["instagram_url"]),
-        instagram_handle=escape(data["instagram_handle"]),
+        official_url=escape(data["official_url"]),
+        logo_image=responsive_image("home-for-painting-logo.png", "畫作收藏所：一起幫畫作找到屬於他的家", "../", "300px"),
+        social_cards=social_cards,
     )
     write_page(
         "contact/index.html",

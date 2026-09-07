@@ -1,17 +1,24 @@
 <section class="contact-page page-section">
   <div class="contact-intro">
-    <p class="section-kicker">Contact</p>
-    <h1>聯絡我們</h1>
-    <p>{{intro}}</p>
+    <header class="page-heading">
+      <h1>聯絡我們</h1>
+      <p class="section-kicker">Contact</p>
+    </header>
+    <p class="editable-copy">{{intro}}</p>
   </div>
-  <div class="contact-links">
-    <a href="mailto:{{email}}"><small>Email</small><strong>{{email}}</strong><span>→</span></a>
-    <a href="{{instagram_url}}" target="_blank" rel="noopener noreferrer"><small>Instagram</small><strong>{{instagram_handle}}</strong><span>↗</span></a>
-  </div>
-  <div class="inquiry-grid">
-    <a href="mailto:{{email}}?subject=Artwork%20Inquiry"><strong>作品收藏洽詢</strong><small>Artwork Inquiry</small><span>→</span></a>
-    <a href="mailto:{{email}}?subject=Exhibition%20Collaboration"><strong>展覽合作</strong><small>Exhibition &amp; Collaboration</small><span>→</span></a>
-    <a href="mailto:{{email}}?subject=Oil%20Painting%20Classes"><strong>油畫課程諮詢</strong><small>Oil Painting Classes</small><span>→</span></a>
+  <section class="official-account" aria-labelledby="official-heading">
+    <a class="official-logo" href="{{official_url}}" target="_blank" rel="noopener noreferrer">{{logo_image}}</a>
+    <div>
+      <p class="section-kicker">Official Account</p>
+      <h2 id="official-heading">畫作收藏所<span>（官方帳號）</span></h2>
+      <p>一起幫畫作找到屬於他的家</p>
+      <a href="{{official_url}}" target="_blank" rel="noopener noreferrer">@homeforpainting.art ↗</a>
+    </div>
+  </section>
+  <div class="social-grid">{{social_cards}}</div>
+  <div class="contact-email">
+    <span>Email</span>
+    <a href="mailto:{{email}}">{{email}} ↗</a>
   </div>
   {{signature_image}}
 </section>

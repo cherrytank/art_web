@@ -16,11 +16,12 @@ python -m pip install -r requirements.txt
 python tools/content_manager.py
 ```
 
-管理介面有三個分頁：
+管理介面有五個分頁：
 
 - **新增作品**：填寫作品編號、名稱、年份、媒材與尺寸；主圖及多張局部圖都可用按鈕選擇，作品說明可稍後再補。
 - **新增展覽**：填寫展覽名稱、展期與地點，選擇主視覺、海報、展場照片，並勾選網站既有作品；也可從既有展覽清單指定唯一的當期展覽。
-- **新增文章**：填寫標題、分類、摘要與正文；段落之間空一行即可。
+- **新增文章**：填寫標題、分類、摘要與正文；段落之間空一行即可。「標題顯示換行」欄位可用 Enter 指定詳細頁標題的換行位置，留白則自動換行。
+- **編輯文字**：從下拉選單選擇首頁、學經歷／創作理念、課程、各頁簡介、聯絡頁或既有文章，直接修改文字。段落換行會保留，文章引用框也有獨立欄位。儲存時先備份至 `.codex-work/content-backups/`，再重建網站。
 - **網站維護**：重新最佳化全部圖片、產生網站、開啟本機預覽，或打開資料夾。
 
 按下「儲存並更新網站」後，程式會自動複製原圖、產生手機與桌面圖片、建立固定格式資料，並更新列表與詳細頁。使用者不需要接觸 HTML。
@@ -100,6 +101,8 @@ python tools/add_content.py article `
 
 文章 JSON 的 `body` 支援四種固定區塊：`lead`、`paragraph`、`heading`、`quote`。可參考 `content/articles/` 內的現有範例。
 
+標題換行使用選填陣列 `"title_lines": ["色彩被覆蓋之後", "真的消失了嗎？"]`。`title` 保留給列表及網頁標題；`title_lines` 只控制詳細頁，不需自行寫 `<br>`。小螢幕若文字過長，仍會自動換行避免溢出。
+
 ## 修改網站內容
 
 - 個人基本資料：`content/site.json`
@@ -108,6 +111,11 @@ python tools/add_content.py article `
 - 展覽詳細頁：`content/exhibition_details/*.json`
 - 課程：`content/classes.json`
 - 聯絡方式：`content/contact.json`
+- 作品／展覽／藝評文章頁簡介：`content/page_copy.json`
+
+所有主要內頁共用 `static/css/styles.css` 的 `--page-top`、`--page-gutter`、`--page-title-size`、`--page-subtitle-size`，分別控制標題的上方距離、左右距離、中文尺寸及英文尺寸。桌面大標上限為 52pt，英文副標上限為 20pt；手機自動縮小。不要分別修改每頁的標題間距。
+
+典藏欄有值時，網站預覽、詳細頁和搜尋一律只顯示「已收藏」，不公開收藏者姓名。聯絡頁的四組 QR code 與連結集中在 `content/contact.json` 的 `social_links`。
 - 文章：`content/articles/*.json`
 - 作品：`content/works/*.json`
 - 共用版型：`templates/*.html`

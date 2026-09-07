@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import sys
 import threading
 import webbrowser
@@ -238,7 +239,7 @@ class WorkForm(ScrollableForm):
         fields.entry("媒材（中文）", self.values["medium_zh"])
         fields.entry("媒材（英文）", self.values["medium_en"])
         fields.entry("尺寸", self.values["dimensions"], hint="例如：45 × 53 cm・10F")
-        fields.entry("典藏資訊", self.values["collection"], hint="沒有可留白。")
+        fields.entry("典藏狀態", self.values["collection"], hint="已收藏請填「已收藏」；未收藏留白。網站只顯示狀態，不公開姓名。")
         self.description = fields.text(
             "作品說明",
             height=6,
@@ -579,6 +580,7 @@ class ArticleForm(ScrollableForm):
         fields.heading("新增文章", "填寫標題、分類與正文。每個空白行會自動分成新的文章段落。")
         fields.entry("網址代稱", self.values["slug"], hint="可留白自動產生；若自行填寫，請使用英文小寫、數字與連字號。")
         fields.entry("文章標題", self.values["title"], required=True)
+        self.title_lines = fields.text("標題顯示換行", height=3, hint="選填：輸入完整標題，按 Enter 指定換行；留白由網頁自動換行。列表仍使用上方文章標題。")
         fields.entry("日期", self.values["date"], required=True, hint="格式：YYYY-MM-DD")
         fields.combobox("文章分類", self.values["category"], list(CATEGORY_LABELS))
         fields.image_picker("文章主圖", self.values["image"])
@@ -622,6 +624,7 @@ class ArticleForm(ScrollableForm):
             "kind": "article",
             "slug": slug,
             "title": title,
+            "title_lines": [line.strip() for line in self.title_lines.get("1.0", "end").splitlines() if line.strip()],
             "date": article_date,
             "category": category,
             "category_zh": category_zh,
@@ -644,7 +647,132 @@ class ArticleForm(ScrollableForm):
         self.values["date"].set(date.today().isoformat())
         self.values["category"].set("創作筆記")
         self.body_text.delete("1.0", "end")
+        self.title_lines.delete("1.0", "end")
         self.canvas.yview_moveto(0)
+
+
+class PageTextForm(ScrollableForm):
+    """Edit existing page copy with labeled fields, without exposing JSON syntax."""
+
+    def __init__(self, parent: ttk.Notebook, app: "ContentManager") -> None:
+        super().__init__(parent)
+        self.app = app
+        self.choice = StringVar(value="首頁")
+        self.documents = {
+            "首頁": "site.json", "學經歷與創作理念": "about.json",
+            "油畫教學": "classes.json", "各頁簡介": "page_copy.json",
+            "聯絡我們": "contact.json",
+        }
+        for path in sorted((ROOT / "content" / "articles").glob("*.json")):
+            data = build_site.load_json(path)
+            self.documents[f"文章：{data['title']} ({path.stem})"] = f"articles/{path.name}"
+        self.widgets: list[tuple[tuple, Text, str]] = []
+        self.load_page()
+
+    def load_page(self) -> None:
+        for child in self.body.winfo_children():
+            child.destroy()
+        self.widgets.clear()
+        self.path = ROOT / "content" / self.documents[self.choice.get()]
+        self.original = self.path.read_text(encoding="utf-8")
+        self.data = json.loads(self.original)
+        fields = FormFields(self)
+        fields.heading("編輯網頁文字", "選擇頁面後直接修改文字。Enter 換行會保留；儲存前會備份原檔，再重建網站。")
+        fields.combobox("要修改的頁面", self.choice, list(self.documents))
+        for child in self.body.winfo_children():
+            if isinstance(child, ttk.Combobox):
+                child.bind("<<ComboboxSelected>>", self.switch_page)
+        self.loaded_choice = self.choice.get()
+        specs = self.field_specs()
+        for keys, label, mode in specs:
+            value = self.get_value(keys)
+            widget = fields.text(label, height=3 if mode != "long" else 6)
+            text = "\n".join(value) if mode == "lines" else str(value)
+            widget.insert("1.0", text)
+            self.widgets.append((keys, widget, mode))
+        fields.actions(self.save, self.app.open_preview)
+        self.canvas.yview_moveto(0)
+
+    def field_specs(self) -> list[tuple]:
+        name = self.path.name
+        groups = {
+            "site.json": [("home_intro", "首頁中文簡介"), ("home_intro_en", "首頁英文簡介")],
+            "about.json": [("intro_zh", "中文簡介"), ("intro_en", "英文簡介"), ("philosophy", "創作理念")],
+            "classes.json": [("intro", "課程簡介"), ("course", "課程內容"), ("location", "上課地點")],
+            "page_copy.json": [("works_intro", "作品頁簡介"), ("exhibitions_intro", "展覽頁簡介"), ("writings_intro", "藝評文章簡介"), ("writings_quote", "藝評文章引言")],
+            "contact.json": [("intro", "聯絡頁簡介"), ("email", "電子郵件")],
+        }
+        specs = [((key,), label, "long") for key, label in groups.get(name, [])]
+        if name == "classes.json":
+            specs.append((("schedule",), "上課時間（每行一個時段）", "lines"))
+            for index in range(len(self.data["features"])):
+                specs.extend([(("features", index, "title"), f"特色 {index + 1} 標題", "text"), (("features", index, "text"), f"特色 {index + 1} 內容", "long")])
+        if name == "about.json":
+            for group, labels in [("education", {"year": "年份", "zh": "學歷", "en": "英文"}), ("positions", {"period": "任職期間", "title": "曾任職務"}), ("current", {"zh": "現任職務", "en": "英文"})]:
+                if isinstance(self.data[group], list):
+                    for index, item in enumerate(self.data[group]):
+                        for key, label in labels.items():
+                            if key in item:
+                                specs.append(((group, index, key), f"{label} {index + 1}", "text"))
+        if self.data.get("kind") == "article":
+            self.data.setdefault("title_lines", [])
+            specs = [(("title",), "文章標題（列表與搜尋用）", "text"), (("title_lines",), "標題顯示換行（每行一句；留白自動換行）", "lines"), (("date",), "日期 YYYY-MM-DD", "text"), (("summary",), "摘要", "long")]
+            labels = {"paragraph": "正文", "lead": "引言", "quote": "引用框", "heading": "小標"}
+            for index, block in enumerate(self.data["body"]):
+                specs.append((("body", index, "text"), f"第 {index + 1} 段・{labels.get(block['type'], '文字')}", "long"))
+        return specs
+
+    def get_value(self, keys: tuple):
+        value = self.data
+        for key in keys:
+            value = value[key]
+        return value
+
+    def has_changes(self) -> bool:
+        for keys, widget, mode in self.widgets:
+            old = self.get_value(keys)
+            text = "\n".join(old) if mode == "lines" else str(old)
+            if widget.get("1.0", "end-1c") != text:
+                return True
+        return False
+
+    def switch_page(self, _event=None) -> None:
+        if self.has_changes() and not messagebox.askyesno("尚未儲存", "切換頁面會捨棄尚未儲存的修改，確定切換嗎？"):
+            self.choice.set(self.loaded_choice)
+            return
+        self.load_page()
+
+    def save(self) -> None:
+        if self.path.read_text(encoding="utf-8") != self.original:
+            messagebox.showerror("檔案已更新", "此檔案已被其他程式修改。請重新選擇頁面，避免蓋掉新內容。")
+            return
+        updated = json.loads(json.dumps(self.data, ensure_ascii=False))
+        for keys, widget, mode in self.widgets:
+            target = updated
+            for key in keys[:-1]:
+                target = target[key]
+            raw = widget.get("1.0", "end-1c").strip()
+            target[keys[-1]] = [line.strip() for line in raw.splitlines() if line.strip()] if mode == "lines" else raw
+        if updated.get("kind") == "article":
+            try:
+                date.fromisoformat(updated["date"])
+                if not updated["title"]:
+                    raise ValueError()
+            except ValueError:
+                messagebox.showerror("資料格式錯誤", "文章標題不能空白，日期請填 YYYY-MM-DD。")
+                return
+        if not messagebox.askyesno("儲存修改", f"確認更新「{self.loaded_choice}」並重新產生網站？"):
+            return
+        try:
+            backup = ROOT / ".codex-work" / "content-backups" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+            backup.mkdir(parents=True)
+            shutil.copy2(self.path, backup / self.path.name)
+            self.path.write_text(json.dumps(updated, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        except OSError as error:
+            messagebox.showerror("無法儲存", str(error))
+            return
+        self.load_page()
+        self.app.finish_save("網頁文字")
 
 
 class MaintenancePanel(ttk.Frame):
@@ -701,6 +829,7 @@ class ContentManager(Tk):
         notebook.add(WorkForm(notebook, self), text="  新增作品  ")
         notebook.add(ExhibitionForm(notebook, self), text="  新增展覽  ")
         notebook.add(ArticleForm(notebook, self), text="  新增文章  ")
+        notebook.add(PageTextForm(notebook, self), text="  編輯文字  ")
         notebook.add(MaintenancePanel(notebook, self), text="  網站維護  ")
 
         status_bar = ttk.Label(self, textvariable=self.status, style="Status.TLabel", anchor="w")
