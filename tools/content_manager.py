@@ -19,6 +19,7 @@ from tkinter import ttk
 import add_content
 import build_site
 from image_pipeline import SUPPORTED_EXTENSIONS
+from page_images import PAGE_IMAGE_LABELS, import_page_image
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -775,6 +776,101 @@ class PageTextForm(ScrollableForm):
         self.app.finish_save("網頁文字")
 
 
+class PageImageForm(ScrollableForm):
+    """Choose a page and replace its image without editing templates or JSON."""
+
+    def __init__(self, parent: ttk.Notebook, app: "ContentManager") -> None:
+        super().__init__(parent)
+        self.app = app
+        self.choice = StringVar(value=PAGE_IMAGE_LABELS["home"])
+        self.image_path = StringVar()
+        self.image_alt = StringVar()
+        self.current_image = StringVar()
+        self.targets: dict[str, tuple[Path, str | None, str, str]] = {}
+        fields = FormFields(self)
+        fields.heading("頁面封面圖片", "選擇頁面、挑選新圖片，再按儲存。各頁可獨立選圖，原圖不會被覆蓋；圖片會自動最佳化。")
+        fields.combobox("要修改的頁面", self.choice, [])
+        self.selector = next(child for child in self.body.winfo_children() if isinstance(child, ttk.Combobox))
+        self.selector.configure(postcommand=self.refresh_choices)
+        self.selector.bind("<<ComboboxSelected>>", self.switch_page)
+        ttk.Label(self.body, textvariable=self.current_image, style="Hint.TLabel", wraplength=650).grid(
+            row=fields.row, column=0, columnspan=3, sticky="w", pady=(4, 16)
+        )
+        fields.row += 1
+        fields.image_picker("封面／主圖", self.image_path)
+        fields.entry("圖片說明", self.image_alt, required=True, hint="請簡單描述圖片內容，供輔助閱讀及圖片放大時使用。")
+        fields.actions(self.save, app.open_preview)
+        self.refresh_choices()
+        self.load_page()
+
+    def refresh_choices(self) -> None:
+        # Refresh when opening the menu, so newly created content is available immediately.
+        targets = {
+            label: (ROOT / "content/page_images.json", key, "image", "alt")
+            for key, label in PAGE_IMAGE_LABELS.items()
+        }
+        for folder, label, image_key, alt_key in [
+            ("works", "作品主圖", "image", "alt"),
+            ("articles", "文章封面", "image", "image_alt"),
+            ("exhibition_details", "展覽封面", "cover_image", "cover_alt"),
+        ]:
+            for path in sorted((ROOT / "content" / folder).glob("*.json")):
+                data = build_site.load_json(path)
+                title = data.get("title_zh") or data.get("title") or path.stem
+                targets[f"{label}：{title} ({path.stem})"] = (path, None, image_key, alt_key)
+        self.targets = targets
+        self.selector.configure(values=list(targets))
+
+    def load_page(self) -> None:
+        self.path, self.slot, self.image_key, self.alt_key = self.targets[self.choice.get()]
+        self.original = self.path.read_text(encoding="utf-8")
+        data = json.loads(self.original)
+        record = data[self.slot] if self.slot else data
+        self.original_image = record[self.image_key]
+        self.original_alt = record[self.alt_key]
+        self.image_path.set(self.original_image)
+        self.image_alt.set(self.original_alt)
+        self.loaded_choice = self.choice.get()
+        self.current_image.set(f"目前圖片：{self.original_image}\n聯絡頁目前無獨立封面，可在此更換官方 Logo 與簽名。" if self.slot and self.slot.startswith("contact_") else f"目前圖片：{self.original_image}")
+
+    def has_changes(self) -> bool:
+        return self.image_path.get() != self.original_image or self.image_alt.get() != self.original_alt
+
+    def switch_page(self, _event=None) -> None:
+        if self.has_changes() and not messagebox.askyesno("尚未儲存", "切換頁面會捨棄尚未儲存的圖片設定，確定切換嗎？"):
+            self.choice.set(self.loaded_choice)
+            return
+        self.load_page()
+
+    def save(self) -> None:
+        if not self.has_changes():
+            messagebox.showinfo("尚未修改", "請先選擇新圖片或修改圖片說明。")
+            return
+        if not self.image_path.get().strip() or not self.image_alt.get().strip():
+            messagebox.showwarning("資料未完成", "請選擇圖片並填寫圖片說明。")
+            return
+        try:
+            if self.path.read_text(encoding="utf-8") != self.original:
+                messagebox.showerror("檔案已更新", "資料已被其他程式修改。請重新選擇頁面，避免覆蓋新內容。")
+                return
+            if not messagebox.askyesno("儲存封面", f"確認更新「{self.loaded_choice}」的圖片並重新產生網站？"):
+                return
+            filename = import_page_image(self.image_path.get(), ROOT / "static/assets/images")
+            updated = json.loads(self.original)
+            record = updated[self.slot] if self.slot else updated
+            record[self.image_key] = filename
+            record[self.alt_key] = self.image_alt.get().strip()
+            backup = ROOT / ".codex-work/content-backups" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+            backup.mkdir(parents=True)
+            shutil.copy2(self.path, backup / self.path.name)
+            self.path.write_text(json.dumps(updated, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        except (OSError, ValueError) as error:
+            messagebox.showerror("無法儲存圖片", str(error))
+            return
+        self.load_page()
+        self.app.finish_save("頁面圖片")
+
+
 class MaintenancePanel(ttk.Frame):
     def __init__(self, parent: ttk.Notebook, app: "ContentManager") -> None:
         super().__init__(parent, padding=34)
@@ -830,6 +926,7 @@ class ContentManager(Tk):
         notebook.add(ExhibitionForm(notebook, self), text="  新增展覽  ")
         notebook.add(ArticleForm(notebook, self), text="  新增文章  ")
         notebook.add(PageTextForm(notebook, self), text="  編輯文字  ")
+        notebook.add(PageImageForm(notebook, self), text="  頁面圖片  ")
         notebook.add(MaintenancePanel(notebook, self), text="  網站維護  ")
 
         status_bar = ttk.Label(self, textvariable=self.status, style="Status.TLabel", anchor="w")

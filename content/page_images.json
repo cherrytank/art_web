@@ -1,0 +1,13 @@
+{
+  "home": {"image": "artist-working.webp", "alt": "油畫藝術家沈東榮於工作室創作"},
+  "about": {"image": "artist-portrait.webp", "alt": "沈東榮自畫像"},
+  "philosophy": {"image": "artist-portrait.webp", "alt": "沈東榮自畫像"},
+  "works": {"image": "artist-working.webp", "alt": "沈東榮於工作室創作"},
+  "exhibitions": {"image": "exhibitions-cover-0907.png", "alt": "沈東榮展覽資訊主視覺"},
+  "classes": {"image": "classes-cover-0907.png", "alt": "油畫調色盤與畫筆，油畫教學封面"},
+  "classes_detail": {"image": "classes-detail-0907.png", "alt": "畫筆與花卉油畫，油畫課程示意"},
+  "writings": {"image": "work-yushan.webp", "alt": "夕陽映照山峰與秋色山林的油畫作品"},
+  "contact_logo": {"image": "home-for-painting-logo.png", "alt": "畫作收藏所：一起幫畫作找到屬於他的家"},
+  "home_signature": {"image": "signature-0906.png", "alt": "沈東榮簽名"},
+  "contact_signature": {"image": "signature-0906.png", "alt": "沈東榮簽名"}
+}

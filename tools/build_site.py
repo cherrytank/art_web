@@ -61,6 +61,21 @@ def collection_label(work: dict[str, Any]) -> str:
     return "已收藏" if work.get("collection") else ""
 
 
+def sort_works(works: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Higher catalog numbers first; unnumbered records follow numbered works."""
+    def key(work: dict[str, Any]) -> tuple:
+        number = str(work.get("catalog_number") or "").strip()
+        return (int(number) if number.isdecimal() else -1,
+                str(work.get("year", "")), number, str(work.get("slug", "")))
+    return sorted(works, key=key, reverse=True)
+
+
+def page_image(slot: str, root: str, sizes: str, **options: Any) -> str:
+    """Render an editable page image through the shared responsive pipeline."""
+    data = load_json(CONTENT / "page_images.json")[slot]
+    return responsive_image(data["image"], data["alt"], root, sizes, **options)
+
+
 def responsive_image(
     filename: str,
     alt: str,
@@ -202,16 +217,14 @@ def build_home(site: dict[str, Any]) -> None:
         read_text(TEMPLATES / "home.html"),
         intro=escape(site["home_intro"]),
         intro_en=escape(site["home_intro_en"]),
-        home_image=responsive_image(
-            "artist-working.webp",
-            "油畫藝術家沈東榮於工作室創作",
+        home_image=page_image(
+            "home",
             "",
             HERO_IMAGE_SIZES,
             priority=True,
         ),
-        home_signature=responsive_image(
-            "signature-0906.png",
-            "沈東榮簽名",
+        home_signature=page_image(
+            "home_signature",
             "",
             "(max-width: 760px) 38vw, 230px",
             css_class="home-signature",
@@ -252,9 +265,8 @@ def build_about(site: dict[str, Any]) -> None:
         root="../",
         education_url="index.html",
         philosophy_url="philosophy/index.html",
-        portrait_image=responsive_image(
-            "artist-portrait.webp",
-            "沈東榮自畫像",
+        portrait_image=page_image(
+            "about",
             "../",
             DETAIL_IMAGE_SIZES,
             priority=True,
@@ -280,9 +292,8 @@ def build_about(site: dict[str, Any]) -> None:
         read_text(TEMPLATES / "philosophy.html"),
         education_url="../index.html",
         philosophy_url="index.html",
-        portrait_image=responsive_image(
-            "artist-portrait.webp",
-            "沈東榮自畫像",
+        portrait_image=page_image(
+            "philosophy",
             "../../",
             DETAIL_IMAGE_SIZES,
             priority=True,
@@ -382,17 +393,15 @@ def work_gallery(work: dict[str, Any], root: str) -> str:
 
 
 def build_works(site: dict[str, Any], works: list[dict[str, Any]]) -> None:
-    works = sorted(works, key=lambda item: item.get("catalog_number", item["slug"]))
-    works = sorted(works, key=lambda item: item["year"], reverse=True)
+    works = sort_works(works)
     years = sorted({str(work["year"]) for work in works}, reverse=True)
     year_options = "".join(f'<option value="{escape(year)}">{escape(year)}</option>' for year in years)
     main = render(
         read_text(TEMPLATES / "works-index.html"),
         root="../",
         intro=escape(load_json(CONTENT / "page_copy.json")["works_intro"]),
-        hero_image=responsive_image(
-            "artist-working.webp",
-            "沈東榮於工作室創作",
+        hero_image=page_image(
+            "works",
             "../",
             HERO_IMAGE_SIZES,
             priority=True,
@@ -519,9 +528,8 @@ def build_exhibitions(
         read_text(TEMPLATES / "exhibitions.html"),
         root="../",
         intro=escape(load_json(CONTENT / "page_copy.json")["exhibitions_intro"]),
-        hero_image=responsive_image(
-            "exhibitions-cover-0907.png",
-            "沈東榮展覽資訊主視覺",
+        hero_image=page_image(
+            "exhibitions",
             "../",
             HERO_IMAGE_SIZES,
             priority=True,
@@ -544,11 +552,12 @@ def build_exhibitions(
     detail_template = read_text(TEMPLATES / "exhibition-detail.html")
     details = sorted(details, key=lambda item: (item["year"], item["title_zh"]), reverse=True)
     for index, detail_data in enumerate(details):
-        selected_works: list[str] = []
+        selected_records: list[dict[str, Any]] = []
         for slug in detail_data.get("selected_work_slugs", []):
             if slug not in work_by_slug:
                 raise ValueError(f"展覽引用了不存在的作品：{slug}")
-            selected_works.append(work_card(work_by_slug[slug], "../../"))
+            selected_records.append(work_by_slug[slug])
+        selected_works = [work_card(work, "../../") for work in sort_works(selected_records)]
 
         gallery = "".join(
             '<figure>'
@@ -624,16 +633,14 @@ def build_classes(site: dict[str, Any]) -> None:
     main = render(
         read_text(TEMPLATES / "classes.html"),
         root="../",
-        hero_image=responsive_image(
-            "classes-cover-0907.png",
-            "油畫調色盤與畫筆，油畫教學封面",
+        hero_image=page_image(
+            "classes",
             "../",
             "100vw",
             priority=True,
         ),
-        course_image=responsive_image(
-            "classes-detail-0907.png",
-            "畫筆與花卉油畫，油畫課程示意",
+        course_image=page_image(
+            "classes_detail",
             "../",
             DETAIL_IMAGE_SIZES,
         ),
@@ -706,9 +713,8 @@ def build_writings(site: dict[str, Any], articles: list[dict[str, Any]]) -> None
         root="../",
         intro=escape(load_json(CONTENT / "page_copy.json")["writings_intro"]),
         quote=escape(load_json(CONTENT / "page_copy.json")["writings_quote"]),
-        hero_image=responsive_image(
-            "work-yushan.webp",
-            "夕陽映照山峰與秋色山林的油畫作品",
+        hero_image=page_image(
+            "writings",
             "../",
             HERO_IMAGE_SIZES,
             priority=True,
@@ -771,9 +777,8 @@ def build_contact(site: dict[str, Any]) -> None:
     main = render(
         read_text(TEMPLATES / "contact.html"),
         root="../",
-        signature_image=responsive_image(
-            "signature-0906.png",
-            "沈東榮簽名",
+        signature_image=page_image(
+            "contact_signature",
             "../",
             "(max-width: 760px) 45vw, 330px",
             css_class="contact-signature",
@@ -781,7 +786,7 @@ def build_contact(site: dict[str, Any]) -> None:
         intro=escape(data["intro"]),
         email=escape(data["email"]),
         official_url=escape(data["official_url"]),
-        logo_image=responsive_image("home-for-painting-logo.png", "畫作收藏所：一起幫畫作找到屬於他的家", "../", "300px"),
+        logo_image=page_image("contact_logo", "../", "300px"),
         social_cards=social_cards,
     )
     write_page(
