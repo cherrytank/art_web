@@ -11,6 +11,7 @@ from pathlib import Path
 
 import build_site
 from image_pipeline import SUPPORTED_EXTENSIONS
+from content_format import parse_markup
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -99,10 +100,7 @@ def add_article(args: argparse.Namespace) -> Path:
         "image": image,
         "image_alt": image_alt,
         "summary": summary,
-        "body": [
-            {"type": "lead" if index == 0 else "paragraph", "text": paragraph}
-            for index, paragraph in enumerate(paragraphs)
-        ],
+        "body": parse_markup("\n\n".join(paragraphs)),
     }
     return save_record("articles", slug, record, args.force)
 
@@ -140,7 +138,7 @@ def add_work(args: argparse.Namespace) -> Path:
         "dimensions": dimensions,
         "collection": collection,
         "featured": bool(args.featured),
-        "description": [description] if description else [],
+        "description": parse_markup(description),
     }
     return save_record("works", slug, record, args.force)
 

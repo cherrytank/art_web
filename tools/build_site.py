@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from image_pipeline import ImageBuildReport, ResponsiveImage, build_responsive_images
+from content_format import plain_summary, render_blocks
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,12 +63,12 @@ def collection_label(work: dict[str, Any]) -> str:
 
 
 def sort_works(works: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Higher catalog numbers first; unnumbered records follow numbered works."""
+    """Catalog numbers ascend numerically; unnumbered records come last."""
     def key(work: dict[str, Any]) -> tuple:
         number = str(work.get("catalog_number") or "").strip()
-        return (int(number) if number.isdecimal() else -1,
+        return (not number.isdecimal(), int(number) if number.isdecimal() else 0,
                 str(work.get("year", "")), number, str(work.get("slug", "")))
-    return sorted(works, key=key, reverse=True)
+    return sorted(works, key=key)
 
 
 def page_image(slot: str, root: str, sizes: str, **options: Any) -> str:
@@ -217,6 +218,7 @@ def build_home(site: dict[str, Any]) -> None:
         read_text(TEMPLATES / "home.html"),
         intro=escape(site["home_intro"]),
         intro_en=escape(site["home_intro_en"]),
+        portrait_caption=escape(site["portrait_caption"]),
         home_image=page_image(
             "home",
             "",
@@ -226,7 +228,7 @@ def build_home(site: dict[str, Any]) -> None:
         home_signature=page_image(
             "home_signature",
             "",
-            "(max-width: 760px) 38vw, 230px",
+            "190px",
             css_class="home-signature",
         ),
     )
@@ -427,7 +429,7 @@ def build_works(site: dict[str, Any], works: list[dict[str, Any]]) -> None:
         if work.get("collection"):
             collection_row = '<div><dt>典藏</dt><dd>已收藏</dd></div>'
         descriptions = work.get("description", [])
-        description = "".join(f"<p>{escape(text)}</p>" for text in descriptions)
+        description = render_blocks(descriptions)
         title_en_line = (
             f'<p class="detail-title-en">{escape(work["title_en"])}</p>'
             if work.get("title_en")
@@ -445,13 +447,13 @@ def build_works(site: dict[str, Any], works: list[dict[str, Any]]) -> None:
             medium_en=escape(work["medium_en"]),
             dimensions=escape(work["dimensions"]),
             collection_row=collection_row,
-            description_block=(f'<div class="prose">{description}</div>' if description else ""),
+            description_block=(f'<div class="work-body formatted-content">{description}</div>' if description else ""),
         )
         write_page(
             f"works/{work['slug']}/index.html",
             title=f"{work['title_zh']}｜{site['name_zh']}",
             description=(
-                descriptions[0]
+                plain_summary(descriptions)
                 if descriptions
                 else f'{work["title_zh"]}，{work["year"]}，{work["dimensions"]}。'
             ),
@@ -689,21 +691,7 @@ def article_row(article: dict[str, Any], root: str) -> str:
 
 
 def render_article_blocks(blocks: list[dict[str, str]]) -> str:
-    output: list[str] = []
-    for block in blocks:
-        text = escape(block["text"])
-        kind = block.get("type", "paragraph")
-        if kind == "heading":
-            output.append(f"<h2>{text}</h2>")
-        elif kind == "quote":
-            output.append(f"<blockquote>{text}</blockquote>")
-        elif kind == "lead":
-            output.append(f'<p class="lead">{text}</p>')
-        elif kind == "paragraph":
-            output.append(f"<p>{text}</p>")
-        else:
-            raise ValueError(f"Unsupported article block type: {kind}")
-    return "".join(output)
+    return render_blocks(blocks)
 
 
 def build_writings(site: dict[str, Any], articles: list[dict[str, Any]]) -> None:
@@ -767,27 +755,29 @@ def build_writings(site: dict[str, Any], articles: list[dict[str, Any]]) -> None
 
 def build_contact(site: dict[str, Any]) -> None:
     data = load_json(CONTENT / "contact.json")
-    social_cards = "".join(
-        f'<a class="social-card" href="{escape(item["url"])}" target="_blank" rel="noopener noreferrer">'
-        f'<div><small>{escape(item["owner"])}</small><h3>{escape(item["platform"])}</h3>'
-        f'<p>{escape(item["handle"])}</p><span>前往帳號 ↗</span></div>'
-        + responsive_image(item["image"], f'{item["owner"]} {item["platform"]} QR code', "../", "240px")
-        + '</a>' for item in data["social_links"]
-    )
+    def cards(group: str) -> str:
+        return "".join(
+            f'<a class="social-card" href="{escape(item["url"])}" target="_blank" rel="noopener noreferrer">'
+            + responsive_image(item["image"], f'{item["owner"]} {item["platform"]} QR code', "../", "180px")
+            + f'<h3>{escape(item["platform"])}</h3><p>{escape(item["handle"])}</p>'
+            f'<span>前往 {escape(item["platform"])} ↗</span></a>'
+            for item in data["social_links"] if item["group"] == group
+        )
     main = render(
         read_text(TEMPLATES / "contact.html"),
         root="../",
         signature_image=page_image(
             "contact_signature",
             "../",
-            "(max-width: 760px) 45vw, 330px",
+            "190px",
             css_class="contact-signature",
         ),
         intro=escape(data["intro"]),
         email=escape(data["email"]),
         official_url=escape(data["official_url"]),
-        logo_image=page_image("contact_logo", "../", "300px"),
-        social_cards=social_cards,
+        logo_image=page_image("contact_logo", "../", "90px"),
+        official_cards=cards("official"),
+        artist_cards=cards("artist"),
     )
     write_page(
         "contact/index.html",

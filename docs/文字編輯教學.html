@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-Hant">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>作品與文章・文字編輯教學</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f4f0e9; color: #25231f; font: 17px/1.9 system-ui, "Microsoft JhengHei", sans-serif; }
+  main { max-width: 960px; margin: auto; padding: 40px 24px 80px; }
+  h1 { font-size: clamp(1.7rem, 5vw, 2.3rem); }
+  h2 { margin-top: 2.2em; font-size: 1.6rem; }
+  h3 { font-size: 1.2rem; }
+  code, pre { font-family: Consolas, monospace; }
+  code { background: #eae3d8; padding: 2px 5px; }
+  pre { padding: 20px; background: #fffdfa; border: 1px solid #d6cfc4; border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .examples { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .preview { padding: 24px; background: #fffdfa; border: 1px solid #d6cfc4; }
+  .preview h2 { margin-top: 0; }
+  .preview .lead { font-size: 1.2rem; }
+  blockquote { margin: 20px 0; padding: 18px; border-left: 2px solid #8d725c; background: #eee7dc; }
+  .box { padding: 18px; border: 1px solid #cbbfae; background: #eae3d8; border-radius: 6px; }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { text-align: left; border-bottom: 1px solid #d6cfc4; padding: 12px 8px; }
+  a { color: #76563d; }
+  @media(max-width: 650px) { .examples { grid-template-columns: 1fr; } td, th { font-size: .9rem; } }
+</style>
+<main>
+  <p>本地內容管理・快速教學</p>
+  <h1>不用寫 HTML，也能整理作品與文章</h1>
+  <p>以下格式適用於「新增作品」的作品說明、「新增文章」的正文，以及「編輯文字」中既有作品／文章的內文。其他欄位（姓名、摘要、聯絡資料等）是純文字，不使用這套格式。</p>
+  <h2>一、修改已經發布的內容</h2>
+  <ol>
+    <li>在專案資料夾開啟命令列，執行 <code>python tools/content_manager.py</code>。</li>
+    <li>切到「編輯文字」，打開「要修改的頁面」，選擇「作品：…」或「文章：…」。剛新增的內容也會出現在下拉清單中。</li>
+    <li>修改標題、作品資訊或內文。正文是一個完整文字框，可直接加段落、刪除整段，或剪下後貼到別的位置。</li>
+    <li>按內文下方的「大標」「小標」「引言」「引用框」「背景框」「條列」按鈕，就能在游標處插入可改寫的範例。「粗體」可先選中文字再按。</li>
+    <li>按「儲存並更新網站」，確認後等待圖片最佳化與 HTML 建置完成，再開啟本機預覽，重新整理檢查。</li>
+    <li>本機修改不會自動上線。確認後再用原本的 Git 提交、推送流程，等 GitHub Actions 部署完成。</li>
+  </ol>
+  <p>作品與文章的網址、主圖、圖庫不會因為修改正文而改動。更換主圖請到「頁面圖片」。儲存前的原始 JSON 會備份在 <code>.codex-work/content-backups/日期時間/</code>；如果需要還原，先關閉管理介面，再將該備份複製回原本的 <code>content/works/</code> 或 <code>content/articles/</code>，最後重新建置。</p>
+  <h2>二、最基本的寫法</h2>
+  <p>符號請用英文半形；標題等符號後要有一個空格。<strong>空一行代表新段落</strong>，同一段內按 Enter 只換行。每一個標題也建議前後空一行。</p>
+  <table>
+    <thead><tr><th>想呈現的樣子</th><th>輸入方式</th></tr></thead>
+    <tbody>
+      <tr><td>一般段落</td><td>直接輸入文字；段落間空一行。</td></tr>
+      <tr><td>段落大標</td><td><code>## 創作的起點</code></td></tr>
+      <tr><td>段落小標</td><td><code>### 光線與色彩</code></td></tr>
+      <tr><td>較大的引言</td><td><code>! 從日常的風景開始。</code></td></tr>
+      <tr><td>引用／重點框</td><td><code>&gt; 讓光線在畫面中慢慢浮現。</code></td></tr>
+      <tr><td>粗體</td><td><code>這裡是 **重要的文字**。</code></td></tr>
+      <tr><td>條列項目</td><td>每項一行，使用 <code>- 第一項</code>、<code>- 第二項</code>。</td></tr>
+      <tr><td>有底色的背景框</td><td>獨立一行 <code>::: box</code> 開始，寫完後以獨立一行 <code>:::</code> 結束。</td></tr>
+    </tbody>
+  </table>
+  <p>這些是<strong>內文的大小層級</strong>，不是整個頁面最上方的大標題。頁面標題請改「文章標題」或「作品中文名」；文章的「標題顯示換行」可另行指定斷行。標題與正文的實際尺寸、顏色由共用樣式控制，手機會自動排版。</p>
+  <h2>三、可直接複製的完整範例</h2>
+  <div class="examples">
+    <div><h3>貼到內文欄位</h3><pre>! 這幅作品，記錄了清晨走入山林時的感受。
+
+## 創作的起點
+
+這裡是第一段說明，可以自由寫下作品的背景。
+同一段內換行也會保留。
+
+這是第二段，其中 **光線與記憶** 是想強調的重點。
+
+### 色彩的安排
+
+- 暖色作為畫面的底層
+- 冷色描繪遠方的山
+
+&gt; 不是複製風景，而是留下觀看時的感受。
+
+::: box
+作品補充
+媒材：油彩、畫布
+此區可以放製作紀錄、觀看提醒或其他補充。
+:::</pre></div>
+    <div><h3>大致呈現效果</h3><div class="preview">
+      <p class="lead">這幅作品，記錄了清晨走入山林時的感受。</p>
+      <h2>創作的起點</h2>
+      <p>這裡是第一段說明，可以自由寫下作品的背景。<br>同一段內換行也會保留。</p>
+      <p>這是第二段，其中 <strong>光線與記憶</strong> 是想強調的重點。</p>
+      <h3>色彩的安排</h3>
+      <ul><li>暖色作為畫面的底層</li><li>冷色描繪遠方的山</li></ul>
+      <blockquote>不是複製風景，而是留下觀看時的感受。</blockquote>
+      <div class="box">作品補充<br>媒材：油彩、畫布<br>此區可以放製作紀錄、觀看提醒或其他補充。</div>
+    </div></div>
+  </div>
+  <h2>四、常見問題</h2>
+  <ul>
+    <li><strong>背景框無法儲存？</strong> 請確認有結尾的 <code>:::</code>，前後不要加空格。格式錯誤時不會寫入檔案。</li>
+    <li><strong>引用框要多行？</strong> 每行開頭都加 <code>&gt; </code>；引言、大標與小標也採相同規則。</li>
+    <li><strong>只想顯示符號？</strong> 如果一行本來就以 <code>## </code> 或其他格式符號開頭，在行首加 <code>\</code>，例如 <code>\## 這不是標題</code>。</li>
+    <li><strong>可以自己指定紅字、字級或放 HTML 嗎？</strong> 目前刻意保留基本樣式，不支援任意 HTML、嵌套框、表格、連結語法或自訂顏色。請用大標、小標、粗體和背景框即可；HTML 會顯示為普通文字。</li>
+    <li><strong>修改其他欄位會弄亂舊內文嗎？</strong> 沒有修改的正文會保留原資料，不會重新分段。舊文章的引言及引用框也會自動轉成可編輯的寫法。</li>
+    <li><strong>作品不需要內文？</strong> 可清空作品內文欄；網站仍保留作品圖片與資料。作品預覽維持統一大小、圖片不裁切。</li>
+  </ul>
+  <p>詳細專案流程見同資料夾上層的 README.md。請修改 <code>content/</code> 或使用管理介面；不要直接改 <code>dist/</code>，因為下次建置會重新產生。</p>
+</main>
+</html>

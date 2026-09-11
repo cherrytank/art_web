@@ -20,6 +20,7 @@ import add_content
 import build_site
 from image_pipeline import SUPPORTED_EXTENSIONS
 from page_images import PAGE_IMAGE_LABELS, import_page_image
+from content_format import EXAMPLES, blocks_to_markup, parse_markup
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -176,6 +177,29 @@ class FormFields:
             self.row += 1
         return widget
 
+    def format_toolbar(self, widget: Text) -> None:
+        """Insert editable examples; selected text can be made bold directly."""
+        group = ttk.Frame(self.parent)
+        group.grid(row=self.row, column=1, columnspan=2, sticky="w", pady=(3, 12))
+        self.row += 1
+
+        def insert(label: str) -> None:
+            if label == "粗體" and widget.tag_ranges("sel"):
+                text = widget.get("sel.first", "sel.last")
+                widget.delete("sel.first", "sel.last")
+                widget.insert("insert", f"**{text}**")
+            else:
+                prefix = "\n\n" if widget.get("1.0", "insert").strip() else ""
+                widget.insert("insert", prefix + EXAMPLES[label] + "\n\n")
+            widget.focus_set()
+            widget.see("insert")
+
+        for index, label in enumerate(EXAMPLES):
+            ttk.Button(group, text=label, width=7, command=partial(insert, label)).grid(
+                row=index // 4, column=index % 4, padx=(0, 5), pady=3)
+        ttk.Button(group, text="格式教學", command=lambda: webbrowser.open(
+            (ROOT / "docs" / "文字編輯教學.html").as_uri())).grid(row=1, column=3, padx=(0, 5), pady=3)
+
     def actions(self, save_command: object, preview_command: object) -> None:
         group = ttk.Frame(self.parent)
         group.grid(row=self.row, column=1, columnspan=2, sticky="e", pady=(25, 0))
@@ -244,8 +268,9 @@ class WorkForm(ScrollableForm):
         self.description = fields.text(
             "作品說明",
             height=6,
-            hint="文案尚未完成時可以留白，日後再補即可。",
+            hint="可留白，日後於「編輯文字」補寫。空一行分段；下方按鈕可插入標題、背景框等格式。",
         )
+        fields.format_toolbar(self.description)
         ttk.Checkbutton(self.body, text="設為精選作品", variable=self.featured).grid(
             row=fields.row, column=1, columnspan=2, sticky="w", pady=(8, 0)
         )
@@ -256,6 +281,11 @@ class WorkForm(ScrollableForm):
         title_zh = self.values["title_zh"].get().strip()
         image_path = self.values["image"].get().strip()
         description = self.description.get("1.0", "end").strip()
+        try:
+            description_blocks = parse_markup(description)
+        except ValueError as error:
+            messagebox.showerror("文字格式錯誤", str(error))
+            return
         if not title_zh or not image_path:
             messagebox.showwarning("資料未完成", "請填寫作品中文名並選擇作品圖片。")
             return
@@ -291,7 +321,7 @@ class WorkForm(ScrollableForm):
             "dimensions": self.values["dimensions"].get().strip() or "尺寸待補",
             "collection": self.values["collection"].get().strip(),
             "featured": bool(self.featured.get()),
-            "description": [description] if description else [],
+            "description": description_blocks,
         }
         if save_record_with_confirmation("works", slug, record):
             self.app.finish_save(f"作品〈{title_zh}〉")
@@ -591,8 +621,9 @@ class ArticleForm(ScrollableForm):
             "文章正文",
             required=True,
             height=13,
-            hint="第一段會以較大的引言呈現；段落之間請空一行。",
+            hint="空一行分段；用下方按鈕插入大標、小標、引言或背景框。格式教學附有完整範例。",
         )
+        fields.format_toolbar(self.body_text)
         fields.actions(self.save, app.open_preview)
 
     def save(self) -> None:
@@ -600,6 +631,11 @@ class ArticleForm(ScrollableForm):
         image_path = self.values["image"].get().strip()
         summary = self.values["summary"].get().strip()
         raw_body = self.body_text.get("1.0", "end").strip()
+        try:
+            body = parse_markup(raw_body)
+        except ValueError as error:
+            messagebox.showerror("文字格式錯誤", str(error))
+            return
         if not title or not image_path or not summary or not raw_body:
             messagebox.showwarning("資料未完成", "請填寫文章標題、主圖、摘要與正文。")
             return
@@ -620,7 +656,6 @@ class ArticleForm(ScrollableForm):
             return
         category = CATEGORY_LABELS[self.values["category"].get()]
         category_zh, category_en = add_content.CATEGORIES[category]
-        paragraphs = [part.strip() for part in re.split(r"\n\s*\n", raw_body) if part.strip()]
         record = {
             "kind": "article",
             "slug": slug,
@@ -633,10 +668,7 @@ class ArticleForm(ScrollableForm):
             "image": image,
             "image_alt": self.values["image_alt"].get().strip() or f"文章〈{title}〉主圖",
             "summary": summary,
-            "body": [
-                {"type": "lead" if index == 0 else "paragraph", "text": paragraph}
-                for index, paragraph in enumerate(paragraphs)
-            ],
+            "body": body,
         }
         if save_record_with_confirmation("articles", slug, record):
             self.app.finish_save(f"文章〈{title}〉")
@@ -664,11 +696,25 @@ class PageTextForm(ScrollableForm):
             "油畫教學": "classes.json", "各頁簡介": "page_copy.json",
             "聯絡我們": "contact.json",
         }
-        for path in sorted((ROOT / "content" / "articles").glob("*.json")):
-            data = build_site.load_json(path)
-            self.documents[f"文章：{data['title']} ({path.stem})"] = f"articles/{path.name}"
+        self.refresh_documents()
         self.widgets: list[tuple[tuple, Text, str]] = []
         self.load_page()
+
+    def refresh_documents(self) -> None:
+        """Discover new records without restarting the local editor."""
+        previous_path = self.documents.get(self.choice.get())
+        self.documents = {key: value for key, value in self.documents.items() if "/" not in value}
+        for folder, label, title_key in [("articles", "文章", "title"), ("works", "作品", "title_zh")]:
+            for path in sorted((ROOT / "content" / folder).glob("*.json")):
+                data = build_site.load_json(path)
+                choice = f"{label}：{data[title_key]} ({path.stem})"
+                relative = f"{folder}/{path.name}"
+                self.documents[choice] = relative
+                if relative == previous_path:
+                    self.choice.set(choice)
+                    self.loaded_choice = choice
+        if hasattr(self, "selector") and self.selector.winfo_exists():
+            self.selector.configure(values=list(self.documents))
 
     def load_page(self) -> None:
         for child in self.body.winfo_children():
@@ -678,18 +724,22 @@ class PageTextForm(ScrollableForm):
         self.original = self.path.read_text(encoding="utf-8")
         self.data = json.loads(self.original)
         fields = FormFields(self)
-        fields.heading("編輯網頁文字", "選擇頁面後直接修改文字。Enter 換行會保留；儲存前會備份原檔，再重建網站。")
+        fields.heading("編輯網頁文字", "可修改既有作品、文章與頁面。正文可新增、刪除、移動整段；儲存前會備份原檔，再重建網站。")
         fields.combobox("要修改的頁面", self.choice, list(self.documents))
         for child in self.body.winfo_children():
             if isinstance(child, ttk.Combobox):
+                self.selector = child
+                child.configure(postcommand=self.refresh_documents)
                 child.bind("<<ComboboxSelected>>", self.switch_page)
         self.loaded_choice = self.choice.get()
         specs = self.field_specs()
         for keys, label, mode in specs:
             value = self.get_value(keys)
-            widget = fields.text(label, height=3 if mode != "long" else 6)
-            text = "\n".join(value) if mode == "lines" else str(value)
+            widget = fields.text(label, height=14 if mode == "formatted" else 6 if mode == "long" else 3)
+            text = self.field_text(value, mode)
             widget.insert("1.0", text)
+            if mode == "formatted":
+                fields.format_toolbar(widget)
             self.widgets.append((keys, widget, mode))
         fields.actions(self.save, self.app.open_preview)
         self.canvas.yview_moveto(0)
@@ -697,7 +747,7 @@ class PageTextForm(ScrollableForm):
     def field_specs(self) -> list[tuple]:
         name = self.path.name
         groups = {
-            "site.json": [("home_intro", "首頁中文簡介"), ("home_intro_en", "首頁英文簡介")],
+            "site.json": [("home_intro", "首頁中文簡介"), ("home_intro_en", "首頁英文簡介"), ("portrait_caption", "首頁照片中文說明")],
             "about.json": [("intro_zh", "中文簡介"), ("intro_en", "英文簡介"), ("philosophy", "創作理念")],
             "classes.json": [("intro", "課程簡介"), ("course", "課程內容"), ("location", "上課地點")],
             "page_copy.json": [("works_intro", "作品頁簡介"), ("exhibitions_intro", "展覽頁簡介"), ("writings_intro", "藝評文章簡介"), ("writings_quote", "藝評文章引言")],
@@ -718,10 +768,23 @@ class PageTextForm(ScrollableForm):
         if self.data.get("kind") == "article":
             self.data.setdefault("title_lines", [])
             specs = [(("title",), "文章標題（列表與搜尋用）", "text"), (("title_lines",), "標題顯示換行（每行一句；留白自動換行）", "lines"), (("date",), "日期 YYYY-MM-DD", "text"), (("summary",), "摘要", "long")]
-            labels = {"paragraph": "正文", "lead": "引言", "quote": "引用框", "heading": "小標"}
-            for index, block in enumerate(self.data["body"]):
-                specs.append((("body", index, "text"), f"第 {index + 1} 段・{labels.get(block['type'], '文字')}", "long"))
+            specs.append((("body",), "文章正文（支援格式）", "formatted"))
+        if self.data.get("kind") == "work":
+            for key in ("title_en", "catalog_number", "collection"):
+                self.data.setdefault(key, "")
+            self.data.setdefault("description", [])
+            specs = [((key,), label, "text") for key, label in [
+                ("title_zh", "作品中文名"), ("title_en", "作品英文名"), ("catalog_number", "作品編號"),
+                ("year", "年份"), ("medium_zh", "中文媒材"), ("medium_en", "英文媒材"),
+                ("dimensions", "尺寸"), ("collection", "典藏資訊（網站只顯示已收藏）")]]
+            specs.append((("description",), "作品內文（可留白、支援格式）", "formatted"))
         return specs
+
+    @staticmethod
+    def field_text(value, mode: str) -> str:
+        if mode == "formatted":
+            return blocks_to_markup(value)
+        return "\n".join(value) if mode == "lines" else str(value)
 
     def get_value(self, keys: tuple):
         value = self.data
@@ -732,7 +795,7 @@ class PageTextForm(ScrollableForm):
     def has_changes(self) -> bool:
         for keys, widget, mode in self.widgets:
             old = self.get_value(keys)
-            text = "\n".join(old) if mode == "lines" else str(old)
+            text = self.field_text(old, mode)
             if widget.get("1.0", "end-1c") != text:
                 return True
         return False
@@ -752,8 +815,21 @@ class PageTextForm(ScrollableForm):
             target = updated
             for key in keys[:-1]:
                 target = target[key]
-            raw = widget.get("1.0", "end-1c").strip()
+            raw = widget.get("1.0", "end-1c")
+            if raw == self.field_text(self.get_value(keys), mode):
+                continue  # Keep legacy blocks and intentional whitespace unchanged.
+            raw = raw.strip()
+            if mode == "formatted":
+                try:
+                    target[keys[-1]] = parse_markup(raw)
+                except ValueError as error:
+                    messagebox.showerror("文字格式錯誤", str(error))
+                    return
+                continue
             target[keys[-1]] = [line.strip() for line in raw.splitlines() if line.strip()] if mode == "lines" else raw
+        if updated.get("kind") == "work" and not updated["title_zh"]:
+            messagebox.showerror("資料格式錯誤", "作品中文名不能空白。")
+            return
         if updated.get("kind") == "article":
             try:
                 date.fromisoformat(updated["date"])
@@ -888,6 +964,7 @@ class MaintenancePanel(ttk.Frame):
             ("打開展覽資料夾", lambda: open_folder(ROOT / "content" / "exhibition_details"), "查看展覽詳細頁 JSON 資料。"),
             ("打開文章資料夾", lambda: open_folder(ROOT / "content" / "articles"), "查看文章 JSON 資料。"),
             ("打開圖片資料夾", lambda: open_folder(add_content.ASSET_DIR), "管理已上傳的圖片。"),
+            ("文字格式教學", lambda: webbrowser.open((ROOT / "docs" / "文字編輯教學.html").as_uri()), "作品與文章的大標、小標、粗體、條列與背景框範例。"),
             ("開啟使用說明", lambda: open_folder(ROOT / "README.md"), "閱讀完整操作方式。"),
         ]
         for row, (label, command, note) in enumerate(actions, start=2):

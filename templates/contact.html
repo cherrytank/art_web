@@ -6,19 +6,26 @@
     </header>
     <p class="editable-copy">{{intro}}</p>
   </div>
-  <section class="official-account" aria-labelledby="official-heading">
-    <a class="official-logo" href="{{official_url}}" target="_blank" rel="noopener noreferrer">{{logo_image}}</a>
-    <div>
-      <p class="section-kicker">Official Account</p>
-      <h2 id="official-heading">畫作收藏所<span>（官方帳號）</span></h2>
-      <p>一起幫畫作找到屬於他的家</p>
-      <a href="{{official_url}}" target="_blank" rel="noopener noreferrer">@homeforpainting.art ↗</a>
-    </div>
-  </section>
-  <div class="social-grid">{{social_cards}}</div>
+  <div class="contact-groups">
+    <section class="contact-group" aria-labelledby="official-heading">
+      <header class="contact-group-heading">
+        <div><h2 id="official-heading">畫作收藏所</h2><p class="section-kicker">Home for Painting</p></div>
+        <a class="official-logo" href="{{official_url}}" target="_blank" rel="noopener noreferrer">{{logo_image}}</a>
+      </header>
+      <p class="account-note">官方帳號 Official Account<br>一起幫畫作找到屬於他的家</p>
+      <div class="social-grid">{{official_cards}}</div>
+    </section>
+    <section class="contact-group" aria-labelledby="artist-heading">
+      <header class="contact-group-heading">
+        <div><h2 id="artist-heading">沈東榮</h2><p class="section-kicker">Laurent Shen</p></div>
+      </header>
+      <p class="account-note">藝術家官方帳號 Artist’s Official Account<br>油畫創作・展覽・日常</p>
+      <div class="social-grid">{{artist_cards}}</div>
+    </section>
+  </div>
   <div class="contact-email">
-    <span>Email</span>
-    <a href="mailto:{{email}}">{{email}} ↗</a>
+    <svg viewBox="0 0 32 24" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="1" y="1" width="30" height="22" rx="2"/><path d="m2 3 14 10L30 3"/></svg>
+    <span>Email</span><a href="mailto:{{email}}">{{email}} ↗</a>
   </div>
   {{signature_image}}
 </section>
