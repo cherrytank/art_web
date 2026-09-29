@@ -344,7 +344,7 @@ a.current-exhibition-card:focus-visible { outline: 2px solid var(--accent); outl
 .contact-intro > * { min-width: 0; }
 .contact-intro > p:last-child { max-width: 520px; margin: 0 0 30px; line-height: 1.9; letter-spacing: .08em; overflow-wrap: anywhere; }
 .contact-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 38px; padding-top: 32px; border-top: 1px solid var(--line); }
-.contact-group { min-width: 0; padding-right: clamp(20px, 3vw, 44px); }
+.contact-group { min-width: 0; padding-right: clamp(20px, 3vw, 44px); display: grid; grid-row: span 3; grid-template-rows: subgrid; }
 .contact-group + .contact-group { border-left: 1px solid var(--line); padding-left: clamp(20px, 3vw, 44px); padding-right: 0; }
 .contact-group-heading { display: flex; justify-content: space-between; gap: 12px; align-items: center; min-height: 90px; }
 .contact-group h2 { margin: 0 0 8px; font-size: clamp(1.45rem, 2.2vw, 2rem); font-weight: 400; }
@@ -518,7 +518,7 @@ a.current-exhibition-card:focus-visible { outline: 2px solid var(--accent); outl
   .contact-page { padding: var(--page-top) var(--page-gutter); }
   .contact-intro { gap: 0; }
   .contact-groups { grid-template-columns: 1fr; margin-top: 18px; }
-  .contact-group { padding-right: 0; }
+  .contact-group { padding-right: 0; display: block; grid-row: auto; }
   .contact-group + .contact-group { border-left: 0; border-top: 1px solid var(--line); padding: 28px 0 0; margin-top: 28px; }
   .social-card img { height: 195px; }
   .contact-links { grid-template-columns: 1fr; margin-top: 45px; }
