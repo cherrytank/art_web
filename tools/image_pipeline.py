@@ -9,7 +9,9 @@ GitHub Pages deployment share exactly the same image workflow.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -128,6 +130,9 @@ def _generate_one(source: Path, output_dir: Path, output_stem: str) -> Responsiv
 def build_responsive_images(
     source_dir: Path,
     output_dir: Path,
+    *,
+    cache_dir: Path | None = None,
+    progress=None,
 ) -> tuple[dict[str, ResponsiveImage], ImageBuildReport]:
     """Generate responsive variants for every supported source image."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -138,13 +143,39 @@ def build_responsive_images(
 
     catalog: dict[str, ResponsiveImage] = {}
     used_stems: set[str] = set()
-    for source in sources:
+    for index, source in enumerate(sources, start=1):
         output_stem = _output_stem(source)
         if output_stem in used_stems:
             digest = hashlib.sha1(source.name.encode("utf-8")).hexdigest()[:8]
             output_stem = f"{output_stem}-{digest}"
         used_stems.add(output_stem)
-        catalog[source.name] = _generate_one(source, output_dir, output_stem)
+        if progress:
+            progress(f"圖片 {index}/{len(sources)}：{source.name}")
+        if cache_dir is None:
+            catalog[source.name] = _generate_one(source, output_dir, output_stem)
+            continue
+        digest = hashlib.sha256(f"v1:{output_stem}:{RESPONSIVE_WIDTHS}:{WEBP_QUALITY}".encode())
+        with source.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        bucket = cache_dir / digest.hexdigest()
+        manifest = bucket / "metadata.json"
+        asset = None
+        try:
+            metadata = json.loads(manifest.read_text(encoding="utf-8"))
+            variants = tuple(ImageVariant(**item) for item in metadata["variants"])
+            if variants and all((bucket / v.filename).is_file() and (bucket / v.filename).stat().st_size == v.size_bytes for v in variants):
+                asset = ResponsiveImage(source.name, metadata["width"], metadata["height"], variants)
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+        if asset is None:
+            bucket.mkdir(parents=True, exist_ok=True)
+            asset = _generate_one(source, bucket, output_stem)
+            from dataclasses import asdict
+            manifest.write_text(json.dumps(asdict(asset)), encoding="utf-8")
+        for variant in asset.variants:
+            shutil.copy2(bucket / variant.filename, output_dir / variant.filename)
+        catalog[source.name] = asset
     report = ImageBuildReport(
         source_count=len(sources),
         variant_count=sum(len(asset.variants) for asset in catalog.values()),

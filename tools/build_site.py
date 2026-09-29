@@ -7,6 +7,9 @@ import json
 import os
 import re
 import shutil
+import tempfile
+import threading
+import uuid
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -300,8 +303,8 @@ def build_about(site: dict[str, Any]) -> None:
             DETAIL_IMAGE_SIZES,
             priority=True,
         ),
-        intro_zh=escape(data["intro_zh"]),
-        intro_en=escape(data["intro_en"]),
+        intro_zh=escape(data.get("philosophy_intro_zh", data["intro_zh"])),
+        intro_en=escape(data.get("philosophy_intro_en", data["intro_en"])),
         philosophy=escape(data["philosophy"]),
     )
     write_page(
@@ -338,7 +341,7 @@ def work_card(work: dict[str, Any], root: str) -> str:
         else ""
     )
     return (
-        f'<article class="work-card" data-year="{escape(work["year"])}" '
+        f'<article id="{escape(work["slug"])}" class="work-card" data-year="{escape(work["year"])}" '
         f'data-search="{escape(search)}"><a href="{root}works/{escape(work["slug"])}/index.html">'
         f'<div class="work-image">{responsive_image(work["image"], work["alt"], root, CARD_IMAGE_SIZES)}</div>'
         '<div class="work-meta"><div class="work-primary">'
@@ -443,6 +446,7 @@ def build_works(site: dict[str, Any], works: list[dict[str, Any]]) -> None:
             title_zh=escape(work["title_zh"]),
             title_en_line=title_en_line,
             catalog_number=escape(work.get("catalog_number", "")),
+            slug=escape(work["slug"]),
             medium_zh=escape(work["medium_zh"]),
             medium_en=escape(work["medium_en"]),
             dimensions=escape(work["dimensions"]),
@@ -573,10 +577,7 @@ def build_exhibitions(
             + "</figure>"
             for photo_index, filename in enumerate(detail_data.get("gallery", []), start=1)
         )
-        introduction = "".join(
-            f"<p>{escape(paragraph)}</p>"
-            for paragraph in detail_data.get("introduction", [])
-        )
+        introduction = render_blocks(detail_data.get("introduction", []))
         previous_item = details[index - 1] if index > 0 else None
         next_item = details[index + 1] if index + 1 < len(details) else None
         detail = render(
@@ -610,19 +611,31 @@ def build_exhibitions(
             introduction=introduction,
             gallery=gallery,
             selected_works="".join(selected_works),
+            publication=publication_html(detail_data.get("publication", {})),
             previous_exhibition=exhibition_page_link(previous_item, "../../", "previous"),
             next_exhibition=exhibition_page_link(next_item, "../../", "next"),
         )
         write_page(
             f'exhibitions/{detail_data["slug"]}/index.html',
             title=f'{detail_data["title_zh"]}｜{site["name_zh"]}',
-            description=(detail_data.get("introduction") or [detail_data["title_zh"]])[0],
+            description=plain_summary(detail_data.get("introduction", [])) or detail_data["title_zh"],
             main=detail,
             root="../../",
             active="exhibitions",
             body_class="page-exhibition-detail",
             social_image=detail_data["cover_image"],
         )
+
+
+def publication_html(data: dict) -> str:
+    """Optional exhibition catalogue; an empty title hides the entire section."""
+    if not data.get("title", "").strip():
+        return ""
+    picture = responsive_image(data["image"], data.get("alt") or data["title"], "../../", "400px", lightbox=True) if data.get("image") else ""
+    return ('<section class="exhibition-publication page-section"><div class="section-heading">'
+            '<p class="section-kicker">Publication</p><h2>出版作品</h2></div>'
+            f'<h3>{escape(data["title"])}</h3>{picture}'
+            f'<div class="formatted-content">{render_blocks(data.get("description", []))}</div></section>')
 
 
 def build_classes(site: dict[str, Any]) -> None:
@@ -681,7 +694,7 @@ def course_icon(index: int) -> str:
 
 def article_row(article: dict[str, Any], root: str) -> str:
     return (
-        f'<article class="article-row" data-category="{escape(article["category"])}">'
+        f'<article id="{escape(article["slug"])}" class="article-row" data-category="{escape(article["category"])}">'
         f'<time datetime="{escape(article["date"])}">{date_display(article["date"])}</time>'
         f'<div><h2>{escape(article["title"])}</h2><p>{escape(article["category_en"])}・'
         f'{escape(article["category_zh"])}</p></div>'
@@ -730,6 +743,7 @@ def build_writings(site: dict[str, Any], articles: list[dict[str, Any]]) -> None
             category_zh=escape(article["category_zh"]),
             category_en=escape(article["category_en"]),
             display_title=display_title(article),
+            slug=escape(article["slug"]),
             summary=escape(article["summary"]),
             article_image=responsive_image(
                 article["image"],
@@ -790,7 +804,49 @@ def build_contact(site: dict[str, Any]) -> None:
     )
 
 
-def build() -> BuildReport:
+_BUILD_LOCK = threading.Lock()
+
+
+def build(progress=None) -> BuildReport:
+    """Publish a complete local build only after all generation succeeds."""
+    global DIST, RESPONSIVE_OUTPUT
+    with _BUILD_LOCK:
+        destination = DIST
+        work_dir = ROOT / ".codex-work"
+        work_dir.mkdir(exist_ok=True)
+        staging = Path(tempfile.mkdtemp(prefix="site-build-", dir=work_dir))
+        previous = work_dir / f"previous-site-{uuid.uuid4().hex}"
+        try:
+            DIST = staging
+            RESPONSIVE_OUTPUT = staging / "assets/images/responsive"
+            report = _build_current(progress)
+            if progress:
+                progress("完成建置，更新本機預覽…")
+            if destination.exists():
+                destination.rename(previous)
+            try:
+                staging.rename(destination)
+            except OSError:
+                if previous.exists():
+                    previous.rename(destination)
+                raise
+            if previous.exists():
+                try:
+                    shutil.rmtree(previous)
+                except OSError:
+                    # Windows may still be serving an old file. The new site is
+                    # already complete; a cleanup issue must not undo success.
+                    if progress:
+                        progress("網站已更新；舊版暫存仍被使用，暫時保留。")
+            return report
+        finally:
+            DIST = destination
+            RESPONSIVE_OUTPUT = destination / "assets/images/responsive"
+            if staging.exists():
+                shutil.rmtree(staging)
+
+
+def _build_current(progress=None) -> BuildReport:
     global IMAGE_CATALOG
 
     site = load_json(CONTENT / "site.json")
@@ -805,7 +861,10 @@ def build() -> BuildReport:
     shutil.copytree(ROOT / "static" / "js", DIST / "assets" / "js")
     (DIST / "assets" / "images").mkdir(parents=True)
     shutil.copy2(ROOT / "static" / "favicon.svg", DIST / "assets" / "favicon.svg")
-    IMAGE_CATALOG, image_report = build_responsive_images(IMAGE_SOURCE, RESPONSIVE_OUTPUT)
+    IMAGE_CATALOG, image_report = build_responsive_images(
+        IMAGE_SOURCE, RESPONSIVE_OUTPUT, cache_dir=ROOT / ".codex-work/image-cache", progress=progress)
+    if progress:
+        progress("圖片已完成，產生各頁 HTML…")
 
     build_home(site)
     build_about(site)

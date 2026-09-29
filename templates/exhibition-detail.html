@@ -17,8 +17,22 @@
       <p class="section-kicker">About the Exhibition</p>
       <h2>展覽介紹</h2>
     </div>
-    <div class="exhibition-prose">{{introduction}}</div>
+    <div class="exhibition-prose formatted-content">{{introduction}}</div>
     <figure class="exhibition-poster">{{poster_image}}</figure>
+  </section>
+
+  <section class="exhibition-information page-section">
+    <div class="section-heading">
+      <p class="section-kicker">Exhibition Information</p>
+      <h2>展覽資訊</h2>
+    </div>
+    <dl>
+      <div><dt>展覽名稱</dt><dd>{{title_zh}}—{{subtitle}}</dd></div>
+      <div><dt>展期</dt><dd>{{date}}</dd></div>
+      <div><dt>地點</dt><dd>{{venue}}</dd></div>
+      <div><dt>地址</dt><dd>{{address}}</dd></div>
+      <div><dt>開放時間</dt><dd>{{opening_hours}}</dd></div>
+    </dl>
   </section>
 
   <section class="exhibition-view page-section" id="exhibition-view">
@@ -37,19 +51,7 @@
     <div class="exhibition-works-grid">{{selected_works}}</div>
   </section>
 
-  <section class="exhibition-information page-section">
-    <div class="section-heading">
-      <p class="section-kicker">Exhibition Information</p>
-      <h2>展覽資訊</h2>
-    </div>
-    <dl>
-      <div><dt>展覽名稱</dt><dd>{{title_zh}}—{{subtitle}}</dd></div>
-      <div><dt>展期</dt><dd>{{date}}</dd></div>
-      <div><dt>地點</dt><dd>{{venue}}</dd></div>
-      <div><dt>地址</dt><dd>{{address}}</dd></div>
-      <div><dt>開放時間</dt><dd>{{opening_hours}}</dd></div>
-    </dl>
-  </section>
+  {{publication}}
 
   <nav class="exhibition-pagination page-section" aria-label="展覽頁面導覽">
     {{previous_exhibition}}

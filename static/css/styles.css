@@ -176,6 +176,10 @@ a { color: inherit; }
 .result-count { margin: 0 0 14px; color: var(--muted); font-size: .82rem; }
 .works-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(38px, 6vw, 84px) clamp(24px, 4vw, 54px); }
 .work-card { transition: opacity .18s ease; }
+.work-card, .article-row { scroll-margin-top: 30px; }
+.exhibition-publication > img { width: min(100%, 400px); max-height: 540px; object-fit: contain; }
+.exhibition-publication .formatted-content { margin: 30px 0 0; }
+.exhibition-about .formatted-content { margin: 0; }
 .work-card[hidden] { display: none; }
 .work-card a { display: block; text-decoration: none; transition: transform .35s cubic-bezier(.22, 1, .36, 1); }
 .work-card a:hover { transform: translateY(-7px); }
@@ -279,7 +283,9 @@ a.current-exhibition-card:focus-visible { outline: 2px solid var(--accent); outl
 .class-hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(245,241,234,.95) 0 33%, rgba(245,241,234,.75) 44%, transparent 70%); pointer-events: none; }
 .class-hero-copy { position: relative; z-index: 1; }
 .class-hero-copy > p:last-child { line-height: 1.9; letter-spacing: .08em; }
-.course-layout { display: grid; grid-template-columns: 1fr .85fr 1fr; gap: clamp(30px, 5vw, 74px); align-items: center; }
+.course-layout { display: grid; grid-template-columns: 1fr .85fr 1fr; gap: clamp(30px, 5vw, 74px); align-items: start; }
+.course-image { align-self: center; }
+.course-features > .section-kicker { font-size: .72rem; line-height: inherit; margin: 0 0 14px; color: var(--accent); }
 .course-info dl { margin: 28px 0 0; border-top: 1px solid var(--line); }
 .course-info dl div { display: grid; grid-template-columns: 96px 1fr; gap: 18px; padding: 18px 0; border-bottom: 1px solid var(--line); }
 .course-info dt { align-self: start; padding: 10px 8px; color: var(--paper-light); background: #786857; text-align: center; font-size: .86rem; }
@@ -342,8 +348,9 @@ a.current-exhibition-card:focus-visible { outline: 2px solid var(--accent); outl
 .contact-group-heading { display: flex; justify-content: space-between; gap: 12px; align-items: center; min-height: 90px; }
 .contact-group h2 { margin: 0 0 8px; font-size: clamp(1.45rem, 2.2vw, 2rem); font-weight: 400; }
 .contact-group .section-kicker { margin: 0; font-size: .75rem; }
-.official-logo { flex: 0 0 80px; }
-.official-logo img { width: 80px; height: 80px; object-fit: contain; }
+.official-logo { flex: 0 0 114px; }
+.official-logo img { width: 114px; height: 114px; object-fit: contain; }
+.contact-email a { font-family: system-ui, sans-serif; font-size: .9rem; }
 .account-note { color: var(--muted); font-size: .85rem; line-height: 1.9; margin: 16px 0 28px; }
 .social-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .social-card { min-width: 0; padding: 8px 0 18px; text-decoration: none; border-radius: 4px; transition: background .2s; }

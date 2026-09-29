@@ -79,6 +79,14 @@ class EditorTests(unittest.TestCase):
         self.root_patch.start()
         self.addCleanup(self.root_patch.stop)
         self.app = Mock()
+        def inline_job(_label, work, complete):
+            try:
+                result = work(lambda text: None)
+            except Exception as error:
+                content_manager.messagebox.showerror("處理失敗", str(error))
+            else:
+                complete(result)
+        self.app._run_job.side_effect = inline_job
         self.panel = content_manager.PageTextForm(content_manager.ttk.Notebook(self.window), self.app)
 
     def test_all_page_fields_load_without_changes(self):
@@ -167,6 +175,52 @@ class EditorTests(unittest.TestCase):
         with patch.object(self.manager.messagebox, "askyesno", return_value=True):
             self.panel.save()
         self.assertEqual(json.loads(self.panel.original)["description"], [])
+
+    def test_new_work_import_uses_background_job_and_preserves_source(self):
+        picture = self.make_image(self.root / "incoming", "red")
+        form = self.manager.WorkForm(self.manager.ttk.Notebook(self.window), self.app)
+        form.values["slug"].set("new-work")
+        form.values["title_zh"].set("新作品")
+        form.values["image"].set(str(picture))
+        form.values["gallery"].set(str(picture))
+        form.description.insert("1.0", "## 創作筆記\n\n文字")
+        form.save()
+        data = json.loads((self.root / "content/works/new-work.json").read_text(encoding="utf-8"))
+        self.assertTrue(data["image"].startswith("page-"))
+        self.assertEqual(data["gallery"], [data["image"]])
+        self.assertEqual(data["description"][0]["type"], "heading")
+        self.assertTrue(picture.exists())
+        self.app._run_job.assert_called_once()
+        self.app.finish_save.assert_called_once()
+
+    def test_failed_new_import_does_not_save_record_or_clear_form(self):
+        form = self.manager.WorkForm(self.manager.ttk.Notebook(self.window), self.app)
+        form.values["slug"].set("failed-work")
+        form.values["title_zh"].set("保留輸入")
+        form.values["image"].set(str(self.root / "missing.png"))
+        with patch.object(self.manager.messagebox, "showerror") as error:
+            form.save()
+        error.assert_called_once()
+        self.assertFalse((self.root / "content/works/failed-work.json").exists())
+        self.assertEqual(form.values["title_zh"].get(), "保留輸入")
+        self.app.finish_save.assert_not_called()
+
+    def test_exhibition_editor_updates_summary_and_optional_publication(self):
+        self.select_record("exhibition_details")
+        for keys, widget, mode in self.panel.widgets:
+            if keys == ("title_zh",):
+                widget.delete("1.0", "end")
+                widget.insert("1.0", "新展覽名稱")
+            if keys == ("publication", "title"):
+                widget.insert("1.0", "展覽畫冊")
+        with patch.object(self.manager.messagebox, "askyesno", return_value=True):
+            self.panel.save()
+        data = json.loads(self.panel.original)
+        self.assertEqual(data["publication"]["title"], "展覽畫冊")
+        summaries = json.loads((self.root / "content/exhibitions.json").read_text(encoding="utf-8"))
+        self.assertEqual(next(item for item in summaries if item.get("slug") == data["slug"])["title"], "新展覽名稱")
+        self.assertIn("展覽畫冊", build_site.publication_html(data["publication"]))
+        self.assertEqual(build_site.publication_html({"title": "", "image": "unused.png"}), "")
 
     def image_panel(self):
         return self.manager.PageImageForm(self.manager.ttk.Notebook(self.window), self.app)

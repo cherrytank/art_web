@@ -61,6 +61,50 @@ articleFilters.forEach((button) => {
 
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+// Remember the actual source (including an exhibition) rather than jumping to
+// the beginning of the works/articles index. Storage is optional in private mode.
+function readVisit(key) {
+  try { return JSON.parse(sessionStorage.getItem(key) || 'null'); } catch { return null; }
+}
+document.querySelectorAll('.work-card a, .article-row a').forEach((link) => {
+  link.addEventListener('click', () => {
+    const card = link.closest('article');
+    const visit = {
+      url: `${location.pathname}${location.search}#${card.id}`,
+      search: workSearch?.value || '', year: workYear?.value || 'all',
+      category: document.querySelector('[data-article-filter].is-active')?.dataset.articleFilter || 'all',
+    };
+    try {
+      sessionStorage.setItem(`return:${new URL(link.href).pathname}`, JSON.stringify(visit));
+      sessionStorage.setItem(`list:${location.pathname}`, JSON.stringify(visit));
+    } catch { /* Browsing still works with the static anchor fallback. */ }
+  });
+});
+const returnLink = document.querySelector('[data-return-link]');
+const visit = readVisit(`return:${location.pathname}`);
+if (returnLink && visit?.url) {
+  const url = new URL(visit.url, location.origin);
+  if (url.origin === location.origin && /\/(works|writings|exhibitions)\//.test(url.pathname)) {
+    returnLink.href = url.href;
+    if (url.pathname.includes('/exhibitions/')) returnLink.textContent = '← 返回展出作品';
+  }
+}
+function restoreList() {
+  if (!location.hash) return;
+  const saved = readVisit(`list:${location.pathname}`);
+  if (saved && saved.url.endsWith(location.hash)) {
+    if (workSearch) workSearch.value = saved.search;
+    if (workYear) workYear.value = saved.year;
+    filterWorks();
+    articleFilters.find(button => button.dataset.articleFilter === saved.category)?.click();
+  }
+  const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+  if (target?.matches('.work-card, .article-row')) {
+    requestAnimationFrame(() => target.scrollIntoView({block: 'start', behavior: 'instant'}));
+  }
+}
+window.addEventListener('pageshow', restoreList);
+
 document.querySelectorAll('[data-gallery]').forEach((gallery) => {
   const track = gallery.querySelector('[data-gallery-track]');
   const slides = track ? [...track.children] : [];

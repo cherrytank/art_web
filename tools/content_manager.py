@@ -9,6 +9,7 @@ import shutil
 import sys
 import threading
 import webbrowser
+from queue import Empty
 from datetime import date, datetime
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -21,6 +22,7 @@ import build_site
 from image_pipeline import SUPPORTED_EXTENSIONS
 from page_images import PAGE_IMAGE_LABELS, import_page_image
 from content_format import EXAMPLES, blocks_to_markup, parse_markup
+from local_jobs import LocalJob
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,6 +36,11 @@ CATEGORY_LABELS = {
 class QuietHandler(SimpleHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:
         return
+
+
+class PreviewServer(ThreadingHTTPServer):
+    # Windows otherwise permits two HTTPServer instances to bind the same port.
+    allow_reuse_address = False
 
 
 class ScrollableForm(ttk.Frame):
@@ -301,8 +308,6 @@ class WorkForm(ScrollableForm):
         slug = self.values["slug"].get().strip() or generated_slug("work")
         try:
             slug = add_content.validate_slug(slug)
-            image = add_content.prepare_image(image_path)
-            gallery = [add_content.prepare_image(path) for path in gallery_paths]
         except SystemExit as error:
             messagebox.showerror("無法儲存", str(error))
             return
@@ -313,8 +318,8 @@ class WorkForm(ScrollableForm):
             "title_zh": title_zh,
             "title_en": self.values["title_en"].get().strip(),
             "year": self.values["year"].get().strip() or str(date.today().year),
-            "image": image,
-            "gallery": gallery,
+            "image": image_path,
+            "gallery": gallery_paths,
             "alt": self.values["alt"].get().strip() or f"沈東榮油畫作品〈{title_zh}〉",
             "medium_zh": self.values["medium_zh"].get().strip() or "油彩、畫布",
             "medium_en": self.values["medium_en"].get().strip() or "Oil on canvas",
@@ -323,9 +328,10 @@ class WorkForm(ScrollableForm):
             "featured": bool(self.featured.get()),
             "description": description_blocks,
         }
-        if save_record_with_confirmation("works", slug, record):
-            self.app.finish_save(f"作品〈{title_zh}〉")
+        def complete():
             self.reset()
+            self.app.finish_save(f"作品〈{title_zh}〉")
+        import_record(self.app, "works", record, ("image", "gallery"), complete)
 
     def reset(self) -> None:
         for key, variable in self.values.items():
@@ -468,9 +474,6 @@ class ExhibitionForm(ScrollableForm):
         slug = self.values["slug"].get().strip() or generated_slug("exhibition")
         try:
             slug = add_content.validate_slug(slug)
-            cover_image = add_content.prepare_image(cover_path)
-            poster_image = add_content.prepare_image(poster_path)
-            gallery = [add_content.prepare_image(path) for path in gallery_paths]
         except SystemExit as error:
             messagebox.showerror("無法儲存", str(error))
             return
@@ -488,30 +491,22 @@ class ExhibitionForm(ScrollableForm):
             "city": city,
             "address": self.values["address"].get().strip(),
             "opening_hours": self.values["opening_hours"].get().strip(),
-            "cover_image": cover_image,
+            "cover_image": cover_path,
             "cover_alt": f"{title_zh}展覽主視覺",
-            "poster_image": poster_image,
+            "poster_image": poster_path,
             "poster_alt": f"{title_zh}展覽海報",
             "introduction": [
                 part.strip()
                 for part in re.split(r"\n\s*\n", raw_intro)
                 if part.strip()
             ],
-            "gallery": gallery,
+            "gallery": gallery_paths,
             "selected_work_slugs": [
                 work_slug
                 for work_slug, variable in self.work_choices.items()
                 if variable.get()
             ],
         }
-        if not save_record_with_confirmation("exhibition_details", slug, record):
-            return
-
-        summary_path = ROOT / "content" / "exhibitions.json"
-        summaries = json.loads(summary_path.read_text(encoding="utf-8"))
-        if self.current.get():
-            for item in summaries:
-                item.pop("current", None)
         summary = {
             "year": year,
             "title": title_zh,
@@ -521,20 +516,11 @@ class ExhibitionForm(ScrollableForm):
         }
         if self.current.get():
             summary["current"] = True
-        summaries = [
-            item
-            for item in summaries
-            if item.get("slug") != slug and item.get("title") != title_zh
-        ]
-        summaries.append(summary)
-        summaries.sort(key=lambda item: str(item.get("year", "")), reverse=True)
-        summary_path.write_text(
-            json.dumps(summaries, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-        self.app.finish_save(f"展覽《{title_zh}》")
-        self.refresh_current_choices()
-        self.reset()
+        def complete():
+            self.refresh_current_choices()
+            self.reset()
+            self.app.finish_save(f"展覽《{title_zh}》")
+        import_record(self.app, "exhibition_details", record, ("cover_image", "poster_image", "gallery"), complete, summary=summary)
 
     def refresh_current_choices(self) -> None:
         summary_path = ROOT / "content" / "exhibitions.json"
@@ -650,7 +636,6 @@ class ArticleForm(ScrollableForm):
         slug = self.values["slug"].get().strip() or generated_slug("article")
         try:
             slug = add_content.validate_slug(slug)
-            image = add_content.prepare_image(image_path)
         except SystemExit as error:
             messagebox.showerror("無法儲存", str(error))
             return
@@ -665,14 +650,15 @@ class ArticleForm(ScrollableForm):
             "category": category,
             "category_zh": category_zh,
             "category_en": category_en,
-            "image": image,
+            "image": image_path,
             "image_alt": self.values["image_alt"].get().strip() or f"文章〈{title}〉主圖",
             "summary": summary,
             "body": body,
         }
-        if save_record_with_confirmation("articles", slug, record):
-            self.app.finish_save(f"文章〈{title}〉")
+        def complete():
             self.reset()
+            self.app.finish_save(f"文章〈{title}〉")
+        import_record(self.app, "articles", record, ("image",), complete)
 
     def reset(self) -> None:
         for variable in self.values.values():
@@ -704,7 +690,7 @@ class PageTextForm(ScrollableForm):
         """Discover new records without restarting the local editor."""
         previous_path = self.documents.get(self.choice.get())
         self.documents = {key: value for key, value in self.documents.items() if "/" not in value}
-        for folder, label, title_key in [("articles", "文章", "title"), ("works", "作品", "title_zh")]:
+        for folder, label, title_key in [("articles", "文章", "title"), ("works", "作品", "title_zh"), ("exhibition_details", "展覽", "title_zh")]:
             for path in sorted((ROOT / "content" / folder).glob("*.json")):
                 data = build_site.load_json(path)
                 choice = f"{label}：{data[title_key]} ({path.stem})"
@@ -740,6 +726,14 @@ class PageTextForm(ScrollableForm):
             widget.insert("1.0", text)
             if mode == "formatted":
                 fields.format_toolbar(widget)
+            if mode == "image":
+                def choose(target=widget):
+                    path = filedialog.askopenfilename(title="選擇出版品封面", filetypes=[("圖片", "*.jpg *.jpeg *.png *.webp *.avif")])
+                    if path:
+                        target.delete("1.0", "end")
+                        target.insert("1.0", path)
+                ttk.Button(self.body, text="選擇圖片…", command=choose).grid(row=fields.row, column=1, sticky="w")
+                fields.row += 1
             self.widgets.append((keys, widget, mode))
         fields.actions(self.save, self.app.open_preview)
         self.canvas.yview_moveto(0)
@@ -748,7 +742,7 @@ class PageTextForm(ScrollableForm):
         name = self.path.name
         groups = {
             "site.json": [("home_intro", "首頁中文簡介"), ("home_intro_en", "首頁英文簡介"), ("portrait_caption", "首頁照片中文說明")],
-            "about.json": [("intro_zh", "中文簡介"), ("intro_en", "英文簡介"), ("philosophy", "創作理念")],
+            "about.json": [("intro_zh", "學經歷中文簡介"), ("intro_en", "學經歷英文簡介"), ("philosophy_intro_zh", "創作理念中文簡介"), ("philosophy_intro_en", "創作理念英文簡介"), ("philosophy", "創作理念全文")],
             "classes.json": [("intro", "課程簡介"), ("course", "課程內容"), ("location", "上課地點")],
             "page_copy.json": [("works_intro", "作品頁簡介"), ("exhibitions_intro", "展覽頁簡介"), ("writings_intro", "藝評文章簡介"), ("writings_quote", "藝評文章引言")],
             "contact.json": [("intro", "聯絡頁簡介"), ("email", "電子郵件")],
@@ -778,6 +772,19 @@ class PageTextForm(ScrollableForm):
                 ("year", "年份"), ("medium_zh", "中文媒材"), ("medium_en", "英文媒材"),
                 ("dimensions", "尺寸"), ("collection", "典藏資訊（網站只顯示已收藏）")]]
             specs.append((("description",), "作品內文（可留白、支援格式）", "formatted"))
+        if self.data.get("kind") == "exhibition":
+            specs = [((key,), label, "text") for key, label in [
+                ("title_zh", "展覽名稱"), ("title_en", "英文名稱"), ("year", "年份"),
+                ("subtitle", "展覽類型"), ("artist", "藝術家"), ("date", "展期"),
+                ("venue", "展覽地點"), ("city", "城市"), ("address", "地址"), ("opening_hours", "開放時間")]]
+            specs.append((("introduction",), "展覽介紹", "formatted"))
+            publication = self.data.setdefault("publication", {})
+            for key, default in [("title", ""), ("image", ""), ("alt", ""), ("description", [])]:
+                publication.setdefault(key, default)
+            specs.extend([(("publication", "title"), "出版作品名稱（留白隱藏整區）", "text"),
+                          (("publication", "image"), "出版品封面（選填）", "image"),
+                          (("publication", "alt"), "出版品圖片說明", "text"),
+                          (("publication", "description"), "出版品介紹", "formatted")])
         return specs
 
     @staticmethod
@@ -840,16 +847,36 @@ class PageTextForm(ScrollableForm):
                 return
         if not messagebox.askyesno("儲存修改", f"確認更新「{self.loaded_choice}」並重新產生網站？"):
             return
-        try:
+        path, original = self.path, self.original
+        image_keys = [keys for keys, _, mode in self.widgets if mode == "image"]
+
+        def write(progress):
+            progress("儲存文字與匯入出版品圖片…")
+            for keys in image_keys:
+                target = updated
+                for key in keys[:-1]:
+                    target = target[key]
+                if target[keys[-1]]:
+                    target[keys[-1]] = import_page_image(target[keys[-1]], ROOT / "static/assets/images")
+            if path.read_text(encoding="utf-8") != original:
+                raise ValueError("檔案已被其他程式修改，請重新載入。")
             backup = ROOT / ".codex-work" / "content-backups" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
             backup.mkdir(parents=True)
-            shutil.copy2(self.path, backup / self.path.name)
-            self.path.write_text(json.dumps(updated, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        except OSError as error:
-            messagebox.showerror("無法儲存", str(error))
-            return
-        self.load_page()
-        self.app.finish_save("網頁文字")
+            shutil.copy2(path, backup / path.name)
+            path.write_text(json.dumps(updated, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            if updated.get("kind") == "exhibition":
+                summary_path = ROOT / "content/exhibitions.json"
+                summaries = build_site.load_json(summary_path)
+                shutil.copy2(summary_path, backup / summary_path.name)
+                for item in summaries:
+                    if item.get("slug") == updated["slug"]:
+                        item.update(title=updated["title_zh"], year=updated["year"], venue=updated["venue"], city=updated["city"])
+                summary_path.write_text(json.dumps(summaries, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+        def complete(_result):
+            self.load_page()
+            self.app.finish_save("網頁文字")
+        self.app._run_job("儲存修改", write, complete)
 
 
 class PageImageForm(ScrollableForm):
@@ -931,20 +958,30 @@ class PageImageForm(ScrollableForm):
                 return
             if not messagebox.askyesno("儲存封面", f"確認更新「{self.loaded_choice}」的圖片並重新產生網站？"):
                 return
-            filename = import_page_image(self.image_path.get(), ROOT / "static/assets/images")
-            updated = json.loads(self.original)
-            record = updated[self.slot] if self.slot else updated
-            record[self.image_key] = filename
-            record[self.alt_key] = self.image_alt.get().strip()
-            backup = ROOT / ".codex-work/content-backups" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-            backup.mkdir(parents=True)
-            shutil.copy2(self.path, backup / self.path.name)
-            self.path.write_text(json.dumps(updated, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        except (OSError, ValueError) as error:
+        except OSError as error:
             messagebox.showerror("無法儲存圖片", str(error))
             return
-        self.load_page()
-        self.app.finish_save("頁面圖片")
+        path, original = self.path, self.original
+        slot, image_key, alt_key = self.slot, self.image_key, self.alt_key
+        image_value, alt = self.image_path.get(), self.image_alt.get().strip()
+
+        def write(progress):
+            progress("驗證並匯入圖片…")
+            filename = import_page_image(image_value, ROOT / "static/assets/images")
+            if path.read_text(encoding="utf-8") != original:
+                raise ValueError("資料已更新，請重新載入後再儲存。")
+            updated = json.loads(original)
+            record = updated[slot] if slot else updated
+            record[image_key] = filename
+            record[alt_key] = alt
+            backup = ROOT / ".codex-work/content-backups" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+            backup.mkdir(parents=True)
+            shutil.copy2(path, backup / path.name)
+            path.write_text(json.dumps(updated, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        def complete(_result):
+            self.load_page()
+            self.app.finish_save("頁面圖片")
+        self.app._run_job("儲存圖片", write, complete)
 
 
 class MaintenancePanel(ttk.Frame):
@@ -986,6 +1023,7 @@ class ContentManager(Tk):
         self.preview_server: ThreadingHTTPServer | None = None
         self.preview_thread: threading.Thread | None = None
         self.status = StringVar(value="準備就緒")
+        self.busy = False
         self._configure_style()
 
         header = ttk.Frame(self, padding=(28, 20, 28, 16), style="Header.TFrame")
@@ -999,13 +1037,19 @@ class ContentManager(Tk):
 
         notebook = ttk.Notebook(self)
         notebook.pack(fill="both", expand=True, padx=18, pady=(0, 10))
-        notebook.add(WorkForm(notebook, self), text="  新增作品  ")
-        notebook.add(ExhibitionForm(notebook, self), text="  新增展覽  ")
-        notebook.add(ArticleForm(notebook, self), text="  新增文章  ")
-        notebook.add(PageTextForm(notebook, self), text="  編輯文字  ")
-        notebook.add(PageImageForm(notebook, self), text="  頁面圖片  ")
-        notebook.add(MaintenancePanel(notebook, self), text="  網站維護  ")
+        create_tabs = ttk.Notebook(notebook)
+        edit_tabs = ttk.Notebook(notebook)
+        notebook.add(edit_tabs, text="  修改既有內容  ")
+        notebook.add(create_tabs, text="  新增內容  ")
+        notebook.add(MaintenancePanel(notebook, self), text="  預覽與維護  ")
+        create_tabs.add(WorkForm(create_tabs, self), text="  作品  ")
+        create_tabs.add(ExhibitionForm(create_tabs, self), text="  展覽／當期展覽  ")
+        create_tabs.add(ArticleForm(create_tabs, self), text="  文章  ")
+        edit_tabs.add(PageTextForm(edit_tabs, self), text="  文字／作品／文章／展覽  ")
+        edit_tabs.add(PageImageForm(edit_tabs, self), text="  封面與圖片  ")
 
+        self.progress = ttk.Progressbar(self, mode="indeterminate")
+        self.progress.pack(fill="x", padx=18, pady=(0, 4))
         status_bar = ttk.Label(self, textvariable=self.status, style="Status.TLabel", anchor="w")
         status_bar.pack(fill="x", padx=18, pady=(0, 12))
         self.protocol("WM_DELETE_WINDOW", self.close)
@@ -1031,53 +1075,88 @@ class ContentManager(Tk):
         style.map("Primary.TButton", background=[("active", "#1f1c19")])
 
     def rebuild(self) -> None:
-        try:
-            report = build_site.build()
-        except Exception as error:  # noqa: BLE001 - UI must surface all build errors
-            messagebox.showerror("建置失敗", str(error))
-            self.status.set("網站建置失敗")
-            return
-        summary = build_summary(report)
-        self.status.set(f"{summary}・{datetime.now():%H:%M:%S}")
-        messagebox.showinfo("完成", f"網站已重新產生。\n\n{summary}")
+        self._run_job("更新網站", lambda progress: build_site.build(progress=progress), self._built)
+
+    def _built(self, report) -> None:
+        self.status.set(build_summary(report))
+        messagebox.showinfo("完成", "網站已更新。\n" + build_summary(report))
 
     def finish_save(self, label: str) -> None:
-        try:
-            report = build_site.build()
-        except Exception as error:  # noqa: BLE001
-            messagebox.showerror("資料已儲存，但網站建置失敗", str(error))
-            self.status.set("內容已儲存・網站建置失敗")
-            return
-        summary = build_summary(report)
-        self.status.set(f"{label}已儲存・{summary}")
-        if messagebox.askyesno(
-            "新增完成",
-            f"{label}已儲存，圖片已最佳化並更新網站。\n\n{summary}\n\n要立即開啟預覽嗎？",
-        ):
-            self.open_preview()
+        def complete(report):
+            self.status.set(f"{label}已儲存・{build_summary(report)}")
+            if messagebox.askyesno("儲存完成", f"{label}已儲存並更新網站。\n要開啟預覽嗎？"):
+                self._run_job("開啟預覽", lambda progress: self._launch_preview(), self._preview_opened)
+        self._run_job(f"{label}已儲存，正在更新網站", lambda progress: build_site.build(progress=progress), complete)
 
     def open_preview(self) -> None:
-        try:
-            build_site.build()
-            if self.preview_server is None:
-                handler = partial(QuietHandler, directory=str(build_site.DIST))
-                self.preview_server = ThreadingHTTPServer(("127.0.0.1", 8000), handler)
-                self.preview_thread = threading.Thread(
-                    target=self.preview_server.serve_forever,
-                    name="site-preview",
-                    daemon=True,
-                )
-                self.preview_thread.start()
-        except OSError:
-            # Another local preview is already using port 8000; opening it is safe.
-            pass
-        except Exception as error:  # noqa: BLE001
-            messagebox.showerror("無法開啟預覽", str(error))
+        def work(progress):
+            build_site.build(progress=progress)
+            return self._launch_preview()
+        self._run_job("準備最新預覽", work, self._preview_opened)
+
+    def _launch_preview(self) -> str:
+        if self.preview_server is None:
+            handler = partial(QuietHandler, directory=str(ROOT / "dist"))
+            try:
+                server = PreviewServer(("127.0.0.1", 8000), handler)
+            except OSError:
+                # Never open an unrelated service that happens to own port 8000.
+                server = PreviewServer(("127.0.0.1", 0), handler)
+            self.preview_server = server
+            self.preview_thread = threading.Thread(target=server.serve_forever, daemon=True, name="site-preview")
+            self.preview_thread.start()
+        url = f"http://127.0.0.1:{self.preview_server.server_port}/"
+        webbrowser.open(url)
+        return url
+
+    def _preview_opened(self, url: str) -> None:
+        self.status.set(f"本機預覽：{url}（關閉管理器會停止預覽）")
+
+    def _run_job(self, label, work, complete) -> None:
+        if self.busy:
             return
-        webbrowser.open("http://127.0.0.1:8000/")
-        self.status.set("本機預覽：http://127.0.0.1:8000/")
+        self.busy = True
+        self.status.set(label + "…首次處理新圖片可能需要幾分鐘")
+        self.progress.start(12)
+        controls = []
+
+        def disable(parent):
+            for widget in parent.winfo_children():
+                if isinstance(widget, (ttk.Button, ttk.Combobox, ttk.Checkbutton, ttk.Notebook)):
+                    controls.append((widget, widget.state()))
+                    widget.state(["disabled"])
+                disable(widget)
+        disable(self)
+        job = LocalJob(work)
+        self.active_job = job
+        job.start()
+
+        def poll():
+            try:
+                while True:
+                    event, value = job.events.get_nowait()
+                    if event == "progress":
+                        self.status.set(value)
+                        continue
+                    self.busy = False
+                    self.progress.stop()
+                    for widget, states in controls:
+                        if widget.winfo_exists():
+                            widget.state(["!disabled", *states])
+                    if event == "error":
+                        self.status.set("處理失敗；已儲存的資料仍保留，可修正後重試")
+                        messagebox.showerror("處理失敗", value)
+                    else:
+                        complete(value)
+                    return
+            except Empty:
+                self.after(75, poll)
+        self.after(75, poll)
 
     def close(self) -> None:
+        if self.busy:
+            messagebox.showinfo("工作進行中", "正在處理圖片或更新網站，請等進度完成後再關閉。視窗仍可正常操作。")
+            return
         if self.preview_server is not None:
             self.preview_server.shutdown()
             self.preview_server.server_close()
@@ -1121,18 +1200,43 @@ def valid_image(value: str) -> bool:
     return True
 
 
-def save_record_with_confirmation(folder: str, slug: str, record: dict) -> bool:
-    try:
-        add_content.save_record(folder, slug, record, False)
-        return True
-    except SystemExit as error:
-        target = ROOT / "content" / folder / f"{slug}.json"
-        if target.exists() and messagebox.askyesno("內容已存在", "同名內容已存在，確定要覆寫嗎？"):
-            add_content.save_record(folder, slug, record, True)
-            return True
-        if not target.exists():
-            messagebox.showerror("無法儲存", str(error))
-        return False
+def import_record(app, folder: str, record: dict, image_fields: tuple, complete, *, summary=None) -> None:
+    """Capture GUI values first; all image validation/copying happens off-thread."""
+    target = ROOT / "content" / folder / f'{record["slug"]}.json'
+    original = target.read_text(encoding="utf-8") if target.exists() else None
+    if original is not None and not messagebox.askyesno("內容已存在", "同名內容已存在，確定要備份後覆寫嗎？"):
+        return
+
+    def work(progress):
+        updated = json.loads(json.dumps(record, ensure_ascii=False))
+        for key in image_fields:
+            values = updated[key] if isinstance(updated[key], list) else [updated[key]]
+            names = []
+            for value in values:
+                progress(f"匯入圖片：{Path(value).name}")
+                names.append(import_page_image(value, ROOT / "static/assets/images"))
+            updated[key] = names if isinstance(updated[key], list) else names[0]
+        current = target.read_text(encoding="utf-8") if target.exists() else None
+        if current != original:
+            raise ValueError("同名內容已被其他程式更新，請重新載入後再儲存。")
+        backup = ROOT / ".codex-work/content-backups" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        backup.mkdir(parents=True)
+        if original is not None:
+            shutil.copy2(target, backup / target.name)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(updated, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        if summary is not None:
+            summary_path = ROOT / "content/exhibitions.json"
+            summaries = build_site.load_json(summary_path)
+            shutil.copy2(summary_path, backup / summary_path.name)
+            if summary.get("current"):
+                for item in summaries:
+                    item.pop("current", None)
+            summaries = [item for item in summaries if item.get("slug") != record["slug"]]
+            summaries.append(summary)
+            summaries.sort(key=lambda item: str(item.get("year", "")), reverse=True)
+            summary_path.write_text(json.dumps(summaries, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    app._run_job("匯入圖片並儲存", work, lambda _result: complete())
 
 
 def open_folder(path: Path) -> None:
