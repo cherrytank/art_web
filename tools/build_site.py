@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import hashlib
 import json
 import os
 import re
@@ -205,6 +206,7 @@ def write_page(
         title=escape(title),
         description=escape(description),
         root=root,
+        css_version=hashlib.sha256((ROOT / "static/css/styles.css").read_bytes()).hexdigest()[:16],
         body_class=body_class,
         main=main,
         year=date.today().year,

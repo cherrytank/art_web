@@ -17,6 +17,24 @@ from image_pipeline import build_responsive_images
 
 
 class ContentTests(unittest.TestCase):
+    def test_stylesheet_version_tracks_css_content(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            css = root / "static/css/styles.css"
+            css.parent.mkdir(parents=True)
+            css.write_text("p { font-size: 15px; }", encoding="utf-8")
+            with patch.object(build_site, "ROOT", root), patch.object(build_site, "DIST", root / "dist"):
+                def generate():
+                    build_site.write_page("index.html", title="Test", description="Test", main="<h1>Test</h1>", root="", active="home", body_class="page-home")
+                    return (root / "dist/index.html").read_text(encoding="utf-8")
+                first = generate()
+                version = hashlib.sha256(css.read_bytes()).hexdigest()[:16]
+                self.assertIn(f"assets/css/styles.css?v={version}", first)
+                self.assertEqual(generate(), first)
+                css.write_text("p { font-size: 14px; }", encoding="utf-8")
+                self.assertNotEqual(generate(), first)
+
     def test_work_numbers_are_numeric_ascending_before_year(self):
         works = [
             {"slug": "small", "catalog_number": "9", "year": "2026"},
