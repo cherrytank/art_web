@@ -162,7 +162,8 @@ a { color: inherit; }
 .philosophy { display: grid; grid-template-columns: .7fr 1.3fr; gap: 70px; align-items: start; }
 .philosophy > p { max-width: 760px; margin: 0; font-size: clamp(1.2rem, 2.1vw, 1.75rem); line-height: 1.9; letter-spacing: .08em; }
 .statement-copy { align-self: start; padding-top: clamp(48px, 6vw, 88px); }
-.statement-copy > p:last-child { max-width: 680px; margin: 0; color: #c4a482; font-size: clamp(1.25rem, 2vw, 1.72rem); line-height: 2; letter-spacing: .1em; }
+.statement-hero .about-intro > p:not(.section-kicker), .statement-copy > p:last-child { font-size: .95rem; }
+.statement-copy > p:last-child { max-width: 680px; margin: 0; color: #c4a482; line-height: 2; letter-spacing: .1em; }
 
 .catalog { min-height: 600px; }
 .catalog-tools { display: grid; grid-template-columns: minmax(260px, 1fr) 220px auto; gap: 18px; align-items: end; margin-bottom: 48px; }
