@@ -59,6 +59,8 @@ class ScrollableForm(ttk.Frame):
         self.body = ttk.Frame(self.canvas, padding=(30, 24, 36, 34))
         self.window = self.canvas.create_window((0, 0), window=self.body, anchor="nw")
         self.canvas.configure(yscrollcommand=scrollbar.set)
+        self.action_bar = ttk.Frame(self, padding=(20, 12))
+        self.action_bar.pack(side="bottom", fill="x")
         self.canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         self.body.columnconfigure(1, weight=1)
@@ -149,17 +151,19 @@ class FormFields:
         ).grid(row=self.row, column=1, columnspan=2, sticky="w", pady=(0, 8))
         self.row += 1
 
-    def combobox(self, label: str, variable: StringVar, values: list[str]) -> None:
+    def combobox(self, label: str, variable: StringVar, values: list[str]) -> ttk.Combobox:
         ttk.Label(self.parent, text=f"{label} *", style="FieldLabel.TLabel").grid(
             row=self.row, column=0, sticky="nw", padx=(0, 18), pady=(8, 3)
         )
-        ttk.Combobox(
+        widget = ttk.Combobox(
             self.parent,
             textvariable=variable,
             values=values,
             state="readonly",
-        ).grid(row=self.row, column=1, columnspan=2, sticky="ew", pady=(4, 8))
+        )
+        widget.grid(row=self.row, column=1, columnspan=2, sticky="ew", pady=(4, 8))
         self.row += 1
+        return widget
 
     def text(self, label: str, *, required: bool = False, height: int = 6, hint: str = "") -> Text:
         text = f"{label} *" if required else label
@@ -210,11 +214,12 @@ class FormFields:
             (ROOT / "docs" / "文字編輯教學.html").as_uri())).grid(row=1, column=3, padx=(0, 5), pady=3)
 
     def actions(self, save_command: object, preview_command: object) -> None:
-        group = ttk.Frame(self.parent)
-        group.grid(row=self.row, column=1, columnspan=2, sticky="e", pady=(25, 0))
-        ttk.Button(group, text="開啟目前網站", command=preview_command).pack(side="left", padx=(0, 10))
-        ttk.Button(group, text="儲存並更新網站", style="Primary.TButton", command=save_command).pack(side="left")
-        self.row += 1
+        group = self.form.action_bar
+        for child in group.winfo_children():
+            child.destroy()
+        ttk.Label(group, text="儲存只更新本機，不會上傳 GitHub。", style="Hint.TLabel").pack(side="left")
+        ttk.Button(group, text="儲存變更", style="Primary.TButton", command=save_command).pack(side="right")
+        ttk.Button(group, text="預覽已儲存內容", command=preview_command).pack(side="right", padx=10)
 
     @staticmethod
     def _choose_image(variable: StringVar) -> None:
@@ -347,7 +352,7 @@ class WorkForm(ScrollableForm):
 
 
 class ExhibitionForm(ScrollableForm):
-    def __init__(self, parent: ttk.Notebook, app: "ContentManager") -> None:
+    def __init__(self, parent: ttk.Notebook, app: "ContentManager", mode: str = "all") -> None:
         super().__init__(parent)
         self.app = app
         self.current_selection = StringVar()
@@ -400,6 +405,19 @@ class ExhibitionForm(ScrollableForm):
         ).grid(row=fields.row, column=1, columnspan=2, sticky="w", pady=(0, 16))
         fields.row += 1
         self.refresh_current_choices()
+        if mode == "current":
+            # Keep current-exhibition selection separate from creating a record.
+            for child in self.body.winfo_children():
+                if isinstance(child, ttk.Label) and child.cget("text") == "新增展覽":
+                    child.configure(text="指定當期展覽")
+                elif isinstance(child, ttk.Label) and str(child.cget("text")).startswith("填寫展覽資訊"):
+                    child.configure(text="選擇既有展覽，按「設為當期」立即儲存並更新本機網站。")
+            return
+        if mode == "new":
+            for child in self.body.winfo_children():
+                if int(child.grid_info().get("row", 0)) >= 2:
+                    child.grid_remove()
+            fields.row = 2
 
         fields.entry("網址代稱", self.values["slug"], hint="可留白自動產生；若自行填寫，請使用英文小寫、數字與連字號。")
         fields.entry("年份", self.values["year"], required=True)
@@ -728,8 +746,9 @@ class PageTextForm(ScrollableForm):
             self.original = self.path.read_text(encoding="utf-8")
             self.data = json.loads(self.original)
         fields = FormFields(self)
-        fields.heading("編輯網頁文字", "可修改既有作品、文章與頁面。正文可新增、刪除、移動整段；儲存前會備份原檔，再重建網站。")
-        fields.combobox("要修改的頁面", self.choice, list(self.documents))
+        fields.heading("編輯內容", "選擇項目後修改。文字與主圖一起儲存；原檔會自動備份。")
+        if len(self.documents) > 1:
+            fields.combobox("編輯項目", self.choice, list(self.documents))
         for child in self.body.winfo_children():
             if isinstance(child, ttk.Combobox):
                 self.selector = child
@@ -739,17 +758,25 @@ class PageTextForm(ScrollableForm):
         specs = self.field_specs()
         for keys, label, mode in specs:
             value = self.get_value(keys)
-            widget = fields.text(label, height=22 if mode == "chronology" else 14 if mode == "formatted" else 6 if mode == "long" else 3)
             text = self.field_text(value, mode)
-            widget.insert("1.0", text)
+            if self.page and mode in {"text", "image", "category"}:
+                variable = StringVar(value=text)
+                widget = fields.combobox("分類", variable, list(CATEGORY_LABELS)) if mode == "category" else fields.entry(label, variable)
+                widget.input_variable = variable  # Keep the Tk variable alive with its field.
+            else:
+                widget = fields.text(label, height=22 if mode == "chronology" else 14 if mode == "formatted" else 6 if mode == "long" else 3)
+                widget.insert("1.0", text)
             if mode == "formatted":
                 fields.format_toolbar(widget)
             if mode == "image":
                 def choose(target=widget):
-                    path = filedialog.askopenfilename(title="選擇出版品封面", filetypes=[("圖片", "*.jpg *.jpeg *.png *.webp *.avif")])
+                    path = filedialog.askopenfilename(title="選擇圖片", filetypes=[("圖片", "*.jpg *.jpeg *.png *.webp *.avif")])
                     if path:
-                        target.delete("1.0", "end")
-                        target.insert("1.0", path)
+                        if isinstance(target, Text):
+                            target.delete("1.0", "end")
+                            target.insert("1.0", path)
+                        else:
+                            target.input_variable.set(path)
                 ttk.Button(self.body, text="選擇圖片…", command=choose).grid(row=fields.row, column=1, sticky="w")
                 fields.row += 1
             self.widgets.append((keys, widget, mode))
@@ -815,6 +842,14 @@ class PageTextForm(ScrollableForm):
                           (("publication", "image"), "出版品封面（選填）", "image"),
                           (("publication", "alt"), "出版品圖片說明", "text"),
                           (("publication", "description"), "出版品介紹", "formatted")])
+        if self.page and self.data.get("kind") in {"article", "work", "exhibition"}:
+            image_fields = {
+                "article": [("image", "主圖", "image"), ("image_alt", "主圖說明", "text")],
+                "work": [("image", "作品主圖", "image"), ("alt", "主圖說明", "text")],
+                "exhibition": [("cover_image", "展覽封面", "image"), ("cover_alt", "封面說明", "text"),
+                               ("poster_image", "展覽海報", "image"), ("poster_alt", "海報說明", "text")],
+            }[self.data["kind"]]
+            specs.extend(((key,), label, mode) for key, label, mode in image_fields)
         return specs
 
     def add_chronology_year(self) -> None:
@@ -829,11 +864,15 @@ class PageTextForm(ScrollableForm):
             target = self.data
             for key in keys[:-1]:
                 target = target[key]
-            raw = widget.get("1.0", "end-1c")
+            raw = self.input_text(widget)
             target[keys[-1]] = [line.strip() for line in raw.splitlines() if line.strip()] if mode == "lines" else raw
         self.data["entries"].append({"year": str(year), "events": []})
         self.data["entries"].sort(key=lambda item: int(item["year"]), reverse=True)
         self.load_page(reload=False)
+
+    @staticmethod
+    def input_text(widget) -> str:
+        return widget.get("1.0", "end-1c") if isinstance(widget, Text) else widget.get()
 
     @staticmethod
     def field_text(value, mode: str) -> str:
@@ -857,7 +896,7 @@ class PageTextForm(ScrollableForm):
         for keys, widget, mode in self.widgets:
             old = self.get_value(keys)
             text = self.field_text(old, mode)
-            if widget.get("1.0", "end-1c") != text:
+            if self.input_text(widget) != text:
                 return True
         return False
 
@@ -876,7 +915,7 @@ class PageTextForm(ScrollableForm):
             target = updated
             for key in keys[:-1]:
                 target = target[key]
-            raw = widget.get("1.0", "end-1c")
+            raw = self.input_text(widget)
             if raw == self.field_text(self.get_value(keys), mode):
                 continue  # Keep legacy blocks and intentional whitespace unchanged.
             raw = raw.strip()
@@ -953,10 +992,11 @@ class PageTextForm(ScrollableForm):
 class PageImageForm(ScrollableForm):
     """Choose a page and replace its image without editing templates or JSON."""
 
-    def __init__(self, parent: ttk.Notebook, app: "ContentManager", page: str | None = None) -> None:
+    def __init__(self, parent: ttk.Notebook, app: "ContentManager", page: str | None = None, records: bool = True) -> None:
         super().__init__(parent)
         self.app = app
         self.page = page
+        self.records = records
         self.choice = StringVar(value=PAGE_IMAGE_LABELS["home"])
         self.image_path = StringVar()
         self.image_alt = StringVar()
@@ -991,6 +1031,8 @@ class PageImageForm(ScrollableForm):
             ("articles", "文章封面", "image", "image_alt"),
             ("exhibition_details", "展覽封面", "cover_image", "cover_alt"),
         ]:
+            if not self.records:
+                continue
             if self.page and folder != {"works": "works", "writings": "articles", "exhibitions": "exhibition_details"}.get(self.page):
                 continue
             for path in sorted((ROOT / "content" / folder).glob("*.json")):
@@ -1089,12 +1131,134 @@ class MaintenancePanel(ttk.Frame):
             ttk.Button(card, text="執行", command=command).grid(row=0, column=1, rowspan=2, padx=(20, 0))
 
 
+PAGE_SECTIONS = [("home", "首頁"), ("about", "關於"), ("chronology", "大事記"),
+                 ("works", "作品"), ("exhibitions", "展覽"), ("classes", "油畫教學"),
+                 ("writings", "文章／出版品"), ("contact", "聯絡我們"), ("maintenance", "預覽與維護")]
+
+
+def form_snapshot(form) -> tuple:
+    """Read visible form inputs on the UI thread to detect unsaved new records."""
+    values = []
+    def visit(parent):
+        for child in parent.winfo_children():
+            if isinstance(child, Text):
+                values.append(child.get("1.0", "end-1c"))
+            elif isinstance(child, (ttk.Entry, ttk.Combobox)):
+                values.append(child.get())
+            visit(child)
+    visit(form)
+    for value in vars(form).values():
+        if isinstance(value, BooleanVar):
+            values.append(value.get())
+        elif isinstance(value, dict):
+            values.extend(item.get() for item in value.values() if isinstance(item, BooleanVar))
+    return tuple(values)
+
+
+class ManagerWorkspace(ttk.Frame):
+    """One page sidebar, one task toolbar, and persistent drafts per task."""
+
+    def __init__(self, parent, app):
+        super().__init__(parent)
+        self.app = app
+        self.forms = {}
+        self.baselines = {}
+        self.active_key = None
+        sidebar = ttk.Frame(self, padding=(8, 12))
+        sidebar.pack(side="left", fill="y")
+        self.page_buttons = {}
+        for page, label in PAGE_SECTIONS:
+            button = ttk.Button(sidebar, text=label, width=15, command=lambda page=page: self.show_page(page))
+            button.pack(fill="x", pady=3)
+            self.page_buttons[page] = button
+        main = ttk.Frame(self)
+        main.pack(side="left", fill="both", expand=True)
+        self.title = ttk.Label(main, style="FormTitle.TLabel", padding=(20, 12))
+        self.title.pack(anchor="w")
+        self.toolbar = ttk.Frame(main, padding=(20, 0, 20, 10))
+        self.toolbar.pack(fill="x")
+        self.content = ttk.Frame(main)
+        self.content.pack(fill="both", expand=True)
+        self.last_tasks = {}
+        self.show_page("home")
+
+    def show_page(self, page):
+        if self.app.busy:
+            return
+        self.page = page
+        self.title.configure(text=dict(PAGE_SECTIONS)[page])
+        for key, button in self.page_buttons.items():
+            button.state(["pressed"] if key == page else ["!pressed"])
+        for child in self.toolbar.winfo_children():
+            child.destroy()
+        tasks = [("edit", "編輯內容")]
+        if page == "maintenance":
+            tasks = [("maintenance", "預覽與維護")]
+        elif page != "chronology":
+            tasks.append(("images", "頁面封面／圖片"))
+        if page in {"works", "exhibitions", "writings"}:
+            tasks.append(("new", {"works": "＋新增作品", "exhibitions": "＋新增展覽", "writings": "＋新增文章／出版品"}[page]))
+        if page == "exhibitions":
+            tasks.append(("current", "指定當期展覽"))
+        self.task_buttons = {}
+        for task, label in tasks:
+            button = ttk.Button(self.toolbar, text=label, command=lambda task=task: self.show_task(task))
+            button.pack(side="left", padx=(0, 8))
+            self.task_buttons[task] = button
+        self.show_task(self.last_tasks.get(page, tasks[0][0]))
+
+    def show_task(self, task):
+        if self.app.busy:
+            return
+        key = (self.page, task)
+        for form in self.forms.values():
+            form.pack_forget()
+        if key not in self.forms:
+            if task == "edit":
+                form = PageTextForm(self.content, self.app, self.page)
+            elif task == "images":
+                form = PageImageForm(self.content, self.app, self.page, records=False)
+            elif task == "maintenance":
+                form = MaintenancePanel(self.content, self.app)
+            elif task == "current":
+                form = ExhibitionForm(self.content, self.app, mode="current")
+            else:
+                constructor = {"works": WorkForm, "writings": ArticleForm, "exhibitions": partial(ExhibitionForm, mode="new")}[self.page]
+                form = constructor(self.content, self.app)
+            self.forms[key] = form
+            self.baselines[key] = form_snapshot(form)
+        form = self.forms[key]
+        if task == "current":
+            form.refresh_current_choices()
+        elif task == "edit":
+            form.refresh_documents()
+        self.forms[key].pack(fill="both", expand=True)
+        self.active_key = key
+        self.last_tasks[self.page] = task
+        for name, button in self.task_buttons.items():
+            button.state(["pressed"] if name == task else ["!pressed"])
+
+    def dirty_forms(self):
+        dirty = []
+        for key, form in self.forms.items():
+            if key[1] in {"maintenance", "current"}:
+                continue
+            changed = form.has_changes() if hasattr(form, "has_changes") else form_snapshot(form) != self.baselines[key]
+            if changed:
+                dirty.append(key)
+        return dirty
+
+    def mark_saved(self):
+        if self.active_key:
+            self.baselines[self.active_key] = form_snapshot(self.forms[self.active_key])
+
+
 class ContentManager(Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("沈東榮網站內容管理器")
-        self.geometry("880x800")
-        self.minsize(720, 620)
+        self.geometry("1120x820")
+        self.minsize(1040, 680)
         self.configure(background="#eee8df")
         self.preview_server: ThreadingHTTPServer | None = None
         self.preview_thread: threading.Thread | None = None
@@ -1107,27 +1271,12 @@ class ContentManager(Tk):
         ttk.Label(header, text="沈東榮網站內容管理器", style="AppTitle.TLabel").pack(anchor="w")
         ttk.Label(
             header,
-            text="新增作品、展覽與文章・自動最佳化圖片・更新網站・本機預覽",
+            text="左側選頁面 → 選擇工作 → 編輯 → 儲存變更｜切換頁面會保留草稿",
             style="AppSubtitle.TLabel",
         ).pack(anchor="w", pady=(5, 0))
 
-        notebook = ttk.Notebook(self)
-        notebook.pack(fill="both", expand=True, padx=18, pady=(0, 10))
-        for page, label in [("home", "首頁"), ("about", "關於"), ("chronology", "大事記"),
-                            ("works", "作品"), ("exhibitions", "展覽"), ("classes", "教學"),
-                            ("writings", "文章／出版品"), ("contact", "聯絡")]:
-            page_tabs = ttk.Notebook(notebook)
-            notebook.add(page_tabs, text=f" {label} ")
-            page_tabs.add(PageTextForm(page_tabs, self, page), text="  編輯內容  ")
-            if page != "chronology":
-                page_tabs.add(PageImageForm(page_tabs, self, page), text="  封面與圖片  ")
-            if page == "works":
-                page_tabs.add(WorkForm(page_tabs, self), text="  新增作品  ")
-            elif page == "exhibitions":
-                page_tabs.add(ExhibitionForm(page_tabs, self), text="  新增／當期展覽  ")
-            elif page == "writings":
-                page_tabs.add(ArticleForm(page_tabs, self), text="  新增文章／出版品  ")
-        notebook.add(MaintenancePanel(notebook, self), text="  預覽與維護  ")
+        self.workspace = ManagerWorkspace(self, self)
+        self.workspace.pack(fill="both", expand=True, padx=12, pady=(0, 10))
 
         self.progress = ttk.Progressbar(self, mode="indeterminate")
         self.progress.pack(fill="x", padx=18, pady=(0, 4))
@@ -1163,13 +1312,14 @@ class ContentManager(Tk):
         messagebox.showinfo("完成", "網站已更新。\n" + build_summary(report))
 
     def finish_save(self, label: str) -> None:
+        self.workspace.mark_saved()
         def complete(report):
             self.status.set(f"{label}已儲存・{build_summary(report)}")
-            if messagebox.askyesno("儲存完成", f"{label}已儲存並更新網站。\n要開啟預覽嗎？"):
-                self._run_job("開啟預覽", lambda progress: self._launch_preview(), self._preview_opened)
         self._run_job(f"{label}已儲存，正在更新網站", lambda progress: build_site.build(progress=progress), complete)
 
     def open_preview(self) -> None:
+        if self.workspace.dirty_forms() and not messagebox.askyesno("尚有未儲存內容", "預覽只會顯示已儲存的版本，未儲存的輸入會保留。\n仍要開啟預覽嗎？"):
+            return
         def work(progress):
             build_site.build(progress=progress)
             return self._launch_preview()
@@ -1237,6 +1387,8 @@ class ContentManager(Tk):
     def close(self) -> None:
         if self.busy:
             messagebox.showinfo("工作進行中", "正在處理圖片或更新網站，請等進度完成後再關閉。視窗仍可正常操作。")
+            return
+        if self.workspace.dirty_forms() and not messagebox.askyesno("尚有未儲存內容", "部分頁面仍有未儲存的輸入。\n確定捨棄這些輸入並關閉？"):
             return
         if self.preview_server is not None:
             self.preview_server.shutdown()

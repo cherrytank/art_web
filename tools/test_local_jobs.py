@@ -100,6 +100,43 @@ class ResponsiveGuiTests(unittest.TestCase):
         self.assertEqual(results, [42])
         duplicate.assert_not_called()
 
+    def test_workspace_preserves_drafts_across_pages_and_warns_before_preview(self):
+        workspace = self.app.workspace
+        workspace.show_page("works")
+        workspace.show_task("new")
+        form = workspace.forms[("works", "new")]
+        form.values["title_zh"].set("未儲存的新作品")
+        workspace.show_page("contact")
+        workspace.show_page("works")
+        self.assertEqual(workspace.active_key, ("works", "new"))
+        self.assertIs(workspace.forms[workspace.active_key], form)
+        self.assertEqual(form.values["title_zh"].get(), "未儲存的新作品")
+        self.assertIn(("works", "new"), workspace.dirty_forms())
+        with patch.object(self.manager.messagebox, "askyesno", return_value=False), patch.object(self.app, "_run_job") as run:
+            self.app.open_preview()
+        run.assert_not_called()
+        with patch.object(self.manager.messagebox, "askyesno", return_value=False), patch.object(self.app, "destroy") as destroy:
+            self.app.close()
+        destroy.assert_not_called()
+
+    def test_record_image_is_edited_with_text_and_current_is_separate(self):
+        workspace = self.app.workspace
+        workspace.show_page("works")
+        form = workspace.forms[("works", "edit")]
+        form.choice.set(next(name for name, path in form.documents.items() if path.startswith("works/")))
+        form.load_page()
+        self.assertIn((("image",), "image"), [(keys, mode) for keys, _, mode in form.widgets])
+        workspace.show_task("images")
+        self.assertTrue(all(slot is not None for _, slot, _, _ in workspace.forms[("works", "images")].targets.values()))
+        workspace.show_page("exhibitions")
+        workspace.show_task("current")
+        current = workspace.forms[("exhibitions", "current")]
+        self.assertFalse(hasattr(current, "introduction"))
+        workspace.show_task("new")
+        new = workspace.forms[("exhibitions", "new")]
+        self.assertTrue(hasattr(new, "introduction"))
+        self.assertFalse(new.current_selector.master.grid_info())
+
     def test_failure_releases_controls_and_allows_retry(self):
         def fail(progress):
             raise ValueError("test failure")
