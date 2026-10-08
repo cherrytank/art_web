@@ -161,15 +161,24 @@ a { color: inherit; }
 .current-list small { display: block; margin-top: 2px; color: #8d7661; font-size: .76rem; }
 .philosophy { display: grid; grid-template-columns: .7fr 1.3fr; gap: 70px; align-items: start; }
 .philosophy > p { max-width: 760px; margin: 0; font-size: clamp(1.2rem, 2.1vw, 1.75rem); line-height: 1.9; letter-spacing: .08em; }
-.statement-copy { align-self: start; padding-top: clamp(48px, 6vw, 88px); }
+.statement-copy { align-self: start; padding-top: 0; }
 .statement-hero .about-intro > p:not(.section-kicker), .statement-copy > p:last-child { font-size: .95rem; }
 .statement-copy > p:last-child { max-width: 680px; margin: 0; color: #c4a482; line-height: 2; letter-spacing: .1em; }
+.chronology-page { padding: var(--page-top) var(--page-gutter); }
+.chronology-intro { max-width: 650px; margin-bottom: 40px; }
+.chronology-list { columns: 2; column-gap: clamp(32px, 5vw, 80px); }
+.chronology-year { break-inside: avoid; margin-bottom: 32px; }
+.chronology-year h2 { margin: 0 0 12px; font-size: 1.3rem; font-weight: 400; }
+.chronology-year ul { list-style: none; margin: 0; padding: 0; }
+.chronology-year li { margin-bottom: 10px; font-size: .95rem; line-height: 1.9; overflow-wrap: anywhere; }
 
 .catalog { min-height: 600px; }
 .catalog-tools { display: grid; grid-template-columns: minmax(260px, 1fr) 220px auto; gap: 18px; align-items: end; margin-bottom: 48px; }
 .work-search { margin: 0; }
 .search-field, .select-field { display: grid; gap: 8px; color: var(--muted); font-family: var(--serif); font-size: .72rem; letter-spacing: .08em; }
 .search-field input, .select-field select { width: 100%; min-height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: 0; color: var(--ink); background: rgba(255,255,255,.66); font: inherit; font-size: .9rem; }
+.search-field input::placeholder { color: var(--muted); opacity: 1; }
+.select-field select { color: var(--muted); }
 .search-control { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
 .search-control input { min-width: 0; border-right: 0; }
 .search-control button { min-width: 76px; border: 1px solid #39342e; border-radius: 0; color: white; background: #39342e; font: inherit; cursor: pointer; transition: background .2s ease; }
@@ -302,7 +311,7 @@ a.current-exhibition-card:focus-visible { outline: 2px solid var(--accent); outl
 
 .writings-hero blockquote { max-width: 480px; margin: 36px 0 0; padding-top: 26px; border-top: 1px solid var(--line); color: var(--muted); line-height: 1.8; }
 .writings-hero > img { object-position: center; }
-.filter-tabs { display: grid; grid-template-columns: repeat(4, 1fr); margin-bottom: 20px; border-bottom: 1px solid var(--line); }
+.filter-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin-bottom: 20px; border-bottom: 1px solid var(--line); }
 .filter-tabs button { position: relative; padding: 15px 8px; border: 0; color: var(--muted); background: transparent; font: inherit; cursor: pointer; }
 .filter-tabs button::after { content: ""; position: absolute; left: 50%; right: 50%; bottom: -1px; height: 2px; background: var(--ink); transition: left .2s ease, right .2s ease; }
 .filter-tabs button.is-active { color: var(--ink); }
@@ -315,6 +324,7 @@ a.current-exhibition-card:focus-visible { outline: 2px solid var(--accent); outl
 .article-row h2 { margin: 0 0 7px; font-size: clamp(1.15rem, 2vw, 1.5rem); font-weight: 400; }
 .article-row p { margin: 0; color: var(--muted); font-size: .75rem; text-transform: uppercase; }
 .article-row img { width: 100%; height: 110px; object-fit: cover; }
+.article-row[data-category="publications"] img { object-fit: contain; }
 .article-row a { justify-self: end; text-decoration: none; font-size: .76rem; text-transform: uppercase; letter-spacing: .08em; }
 
 .article-detail { min-height: 740px; }
@@ -324,6 +334,7 @@ a.current-exhibition-card:focus-visible { outline: 2px solid var(--accent); outl
 .article-header h1 { max-width: 760px; margin: 22px 0; font-size: clamp(1.5rem, 12cqi, 40pt); font-weight: 400; line-height: 1.4; overflow-wrap: anywhere; }
 .article-summary { max-width: 700px; color: var(--muted); font-size: 1.06rem; line-height: 1.8; }
 .article-header img { width: 100%; max-height: 550px; object-fit: cover; }
+.page-publication .article-header img { object-fit: contain; }
 /* Shared, deliberately small editorial vocabulary for works and articles. */
 .formatted-content { max-width: 780px; margin: 70px auto 0; font-size: 1.07rem; line-height: 2; letter-spacing: .04em; overflow-wrap: anywhere; }
 .formatted-content p, .formatted-content h2, .formatted-content h3, .formatted-content blockquote, .formatted-content .text-box { white-space: pre-line; }
@@ -349,8 +360,9 @@ a.current-exhibition-card:focus-visible { outline: 2px solid var(--accent); outl
 .contact-group-heading { display: flex; justify-content: space-between; gap: 12px; align-items: center; min-height: 90px; }
 .contact-group h2 { margin: 0 0 8px; font-size: clamp(1.45rem, 2.2vw, 2rem); font-weight: 400; }
 .contact-group .section-kicker { margin: 0; font-size: .75rem; }
-.official-logo { flex: 0 0 114px; }
-.official-logo img { width: 114px; height: 114px; object-fit: contain; }
+.official-logo { flex: 0 0 180px; width: 180px; height: 180px; position: relative; }
+/* Enlarge the artwork visually without changing the 180px layout slot. */
+.official-logo img { width: 180px; height: 180px; object-fit: contain; transform: scale(1.25); transform-origin: center; }
 .contact-email a { font-family: system-ui, sans-serif; font-size: .9rem; }
 .account-note { color: var(--muted); font-size: .85rem; line-height: 1.9; margin: 16px 0 28px; }
 .social-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
@@ -475,6 +487,9 @@ a.current-exhibition-card:focus-visible { outline: 2px solid var(--accent); outl
   .about-timeline { grid-template-columns: 1fr; }
   .about-timeline .birth-year { grid-column: auto; }
   .statement-copy { grid-column: auto; padding-top: 0; }
+  .chronology-page { padding: var(--page-top) var(--page-gutter); }
+  .chronology-list { columns: 1; }
+  .chronology-page .page-heading h1 { font-size: clamp(1.65rem, 7.2vw, 2.5rem); }
   .position-list p { grid-template-columns: 105px 1fr; }
   .philosophy { grid-template-columns: 1fr; gap: 30px; }
   .catalog-tools { grid-template-columns: 1fr; }
@@ -519,6 +534,7 @@ a.current-exhibition-card:focus-visible { outline: 2px solid var(--accent); outl
   .contact-intro { gap: 0; }
   .contact-groups { grid-template-columns: 1fr; margin-top: 18px; }
   .contact-group { padding-right: 0; display: block; grid-row: auto; }
+  .contact-group-heading { flex-wrap: wrap; }
   .contact-group + .contact-group { border-left: 0; border-top: 1px solid var(--line); padding: 28px 0 0; margin-top: 28px; }
   .social-card img { height: 195px; }
   .contact-links { grid-template-columns: 1fr; margin-top: 45px; }

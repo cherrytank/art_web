@@ -17,6 +17,38 @@ from image_pipeline import build_responsive_images
 
 
 class ContentTests(unittest.TestCase):
+    def test_chronology_format_roundtrip_validation_and_escaping(self):
+        import chronology
+        entries = [{"year": "2026", "events": ["<測試事件>", "第二件"]}, {"year": "2025", "events": []}]
+        self.assertEqual(chronology.from_text(chronology.to_text(entries)), entries)
+        for invalid in ["未填年份", "2026\n事件\n2026\n重複年份"]:
+            with self.assertRaises(ValueError):
+                chronology.from_text(invalid)
+        data = {"intro_zh": "中文", "intro_en": "English", "entries": entries}
+        with patch.object(build_site, "load_json", return_value=data), patch.object(build_site, "write_page") as write:
+            build_site.build_chronology({"name_zh": "沈東榮"})
+        main = write.call_args.kwargs["main"]
+        self.assertIn("&lt;測試事件&gt;", main)
+        self.assertNotIn("<h2>2025</h2>", main)
+        self.assertNotIn("{{", main)
+
+    def test_publication_category_year_and_detail(self):
+        import add_content
+        self.assertEqual(add_content.CATEGORIES["publications"], ("出版品", "Publications"))
+        self.assertEqual(build_site.date_display("2021"), "2021")
+        self.assertEqual(build_site.date_display("2026-10-08"), "2026.10.08")
+        for invalid in ["0000", "202", "2026-02-30"]:
+            with self.assertRaises(ValueError):
+                build_site.date_display(invalid)
+        article = build_site.load_json(build_site.CONTENT / "articles/heaven-earth-2021.json")
+        with patch.object(build_site, "responsive_image", return_value="<img>"), patch.object(build_site, "write_page") as write:
+            build_site.build_writings({"name_zh": "沈東榮"}, [article])
+        index = write.call_args_list[0].kwargs["main"]
+        self.assertIn('data-article-filter="publications"', index)
+        self.assertIn('data-category="publications"', index)
+        self.assertIn("page-publication", write.call_args.kwargs["body_class"])
+        self.assertIn('<time datetime="2021">2021</time>', write.call_args.kwargs["main"])
+
     def test_stylesheet_version_tracks_css_content(self):
         import hashlib
         with tempfile.TemporaryDirectory() as directory:
@@ -113,6 +145,69 @@ class EditorTests(unittest.TestCase):
             self.panel.load_page()
             self.assertFalse(self.panel.has_changes(), choice)
             self.assertTrue(self.panel.widgets, choice)
+
+    def test_page_scopes_only_list_related_content_and_images(self):
+        for page in ["home", "about", "chronology", "works", "exhibitions", "classes", "writings", "contact"]:
+            with self.subTest(page=page):
+                tabs = self.manager.ttk.Notebook(self.window)
+                panel = self.manager.PageTextForm(tabs, self.app, page)
+                folder = {"works": "works", "exhibitions": "exhibition_details", "writings": "articles"}.get(page)
+                for path in panel.documents.values():
+                    if "/" in path:
+                        self.assertEqual(path.split("/")[0], folder)
+                if folder:
+                    self.assertEqual(list(panel.documents.values()).count("page_copy.json"), 1)
+                    self.assertTrue(all(keys[0].startswith(page + "_") for keys, _, _ in panel.widgets))
+                if page != "chronology":
+                    images = self.manager.PageImageForm(tabs, self.app, page)
+                    for path, slot, _, _ in images.targets.values():
+                        if slot:
+                            self.assertTrue(slot == page or slot.startswith(page + "_") or (page == "about" and slot == "philosophy"))
+                        else:
+                            self.assertEqual(path.parent.name, folder)
+
+    def test_year_form_add_preserves_draft_sorts_and_saves(self):
+        panel = self.manager.PageTextForm(self.manager.ttk.Notebook(self.window), self.app, "chronology")
+        event = next(widget for keys, widget, _ in panel.widgets if keys == ("entries", 0, "events"))
+        event.insert("end", "\n尚未儲存的事件")
+        with patch.object(self.manager.simpledialog, "askinteger", return_value=2026):
+            panel.add_chronology_year()
+        self.assertTrue(panel.has_changes())
+        self.assertEqual(panel.data["entries"][0]["year"], "2026")
+        self.assertIn("尚未儲存的事件", panel.data["entries"][1]["events"])
+        event = next(widget for keys, widget, _ in panel.widgets if keys == ("entries", 0, "events"))
+        event.insert("1.0", "新的展覽\n新的創作")
+        with patch.object(self.manager.messagebox, "askyesno", return_value=True):
+            panel.save()
+        saved = json.loads(panel.original)
+        self.assertEqual(saved["entries"][0], {"year": "2026", "events": ["新的展覽", "新的創作"]})
+        self.assertFalse(panel.has_changes())
+        with patch.object(self.manager.simpledialog, "askinteger", return_value=2026), patch.object(self.manager.messagebox, "showinfo") as info:
+            panel.add_chronology_year()
+        info.assert_called_once()
+
+    def test_chronology_can_add_year_and_save_without_json(self):
+        self.panel.choice.set("年表．大事記")
+        self.panel.load_page()
+        widget = next(widget for _, widget, mode in self.panel.widgets if mode == "chronology")
+        widget.insert("1.0", "2026\n新增藝術活動\n\n")
+        with patch.object(self.manager.messagebox, "askyesno", return_value=True):
+            self.panel.save()
+        data = json.loads(self.panel.original)
+        self.assertEqual(data["entries"][0], {"year": "2026", "events": ["新增藝術活動"]})
+        self.assertEqual(len(data["entries"]), 26)
+        self.assertFalse(self.panel.has_changes())
+
+    def test_existing_article_can_change_to_publication_category(self):
+        self.select_record("articles")
+        widget = next(widget for _, widget, mode in self.panel.widgets if mode == "category")
+        widget.delete("1.0", "end")
+        widget.insert("1.0", "出版品")
+        with patch.object(self.manager.messagebox, "askyesno", return_value=True):
+            self.panel.save()
+        data = json.loads(self.panel.original)
+        self.assertEqual((data["category"], data["category_zh"], data["category_en"]),
+                         ("publications", "出版品", "Publications"))
 
     def test_edit_save_backup_and_title_line_breaks(self):
         choice = next(key for key, value in self.panel.documents.items() if value == "articles/covered-colors.json")

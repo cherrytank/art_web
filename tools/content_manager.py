@@ -14,7 +14,7 @@ from datetime import date, datetime
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from tkinter import BooleanVar, StringVar, Text, Tk, filedialog, font, messagebox
+from tkinter import BooleanVar, StringVar, Text, Tk, filedialog, font, messagebox, simpledialog
 from tkinter import ttk
 
 import add_content
@@ -23,6 +23,7 @@ from image_pipeline import SUPPORTED_EXTENSIONS
 from page_images import PAGE_IMAGE_LABELS, import_page_image
 from content_format import EXAMPLES, blocks_to_markup, parse_markup
 from local_jobs import LocalJob
+import chronology
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +31,7 @@ CATEGORY_LABELS = {
     "創作筆記": "painting-notes",
     "藝術評論": "art-criticism",
     "作品故事": "artwork-story",
+    "出版品": "publications",
 }
 
 
@@ -598,7 +600,7 @@ class ArticleForm(ScrollableForm):
         fields.entry("網址代稱", self.values["slug"], hint="可留白自動產生；若自行填寫，請使用英文小寫、數字與連字號。")
         fields.entry("文章標題", self.values["title"], required=True)
         self.title_lines = fields.text("標題顯示換行", height=3, hint="選填：輸入完整標題，按 Enter 指定換行；留白由網頁自動換行。列表仍使用上方文章標題。")
-        fields.entry("日期", self.values["date"], required=True, hint="格式：YYYY-MM-DD")
+        fields.entry("日期", self.values["date"], required=True, hint="格式：YYYY-MM-DD；出版品只知道年份時可填 YYYY。")
         fields.combobox("文章分類", self.values["category"], list(CATEGORY_LABELS))
         fields.image_picker("文章主圖", self.values["image"])
         fields.entry("圖片說明", self.values["image_alt"], hint="可留白自動使用文章標題。")
@@ -629,9 +631,9 @@ class ArticleForm(ScrollableForm):
             return
         article_date = self.values["date"].get().strip()
         try:
-            date.fromisoformat(article_date)
+            build_site.date_display(article_date)
         except ValueError:
-            messagebox.showerror("日期格式錯誤", "日期請使用 YYYY-MM-DD，例如 2026-09-01。")
+            messagebox.showerror("日期格式錯誤", "日期請使用 YYYY-MM-DD，例如 2026-09-01，或四位數年份。")
             return
         slug = self.values["slug"].get().strip() or generated_slug("article")
         try:
@@ -673,16 +675,19 @@ class ArticleForm(ScrollableForm):
 class PageTextForm(ScrollableForm):
     """Edit existing page copy with labeled fields, without exposing JSON syntax."""
 
-    def __init__(self, parent: ttk.Notebook, app: "ContentManager") -> None:
+    def __init__(self, parent: ttk.Notebook, app: "ContentManager", page: str | None = None) -> None:
         super().__init__(parent)
         self.app = app
+        self.page = page
         self.choice = StringVar(value="首頁")
         self.documents = {
             "首頁": "site.json", "學經歷與創作理念": "about.json",
             "油畫教學": "classes.json", "各頁簡介": "page_copy.json",
             "聯絡我們": "contact.json",
+            "年表．大事記": "chronology.json",
         }
         self.refresh_documents()
+        self.choice.set(next(iter(self.documents)))
         self.widgets: list[tuple[tuple, Text, str]] = []
         self.load_page()
 
@@ -690,7 +695,19 @@ class PageTextForm(ScrollableForm):
         """Discover new records without restarting the local editor."""
         previous_path = self.documents.get(self.choice.get())
         self.documents = {key: value for key, value in self.documents.items() if "/" not in value}
+        if self.page:
+            allowed = {
+                "home": {"site.json"}, "about": {"about.json"},
+                "works": {"page_copy.json"}, "exhibitions": {"page_copy.json"},
+                "classes": {"classes.json"}, "writings": {"page_copy.json"},
+                "contact": {"contact.json"}, "chronology": {"chronology.json"},
+            }[self.page]
+            if "page_copy.json" in allowed:
+                self.documents = {"頁面簡介": "page_copy.json"}
+            self.documents = {key: value for key, value in self.documents.items() if value in allowed}
         for folder, label, title_key in [("articles", "文章", "title"), ("works", "作品", "title_zh"), ("exhibition_details", "展覽", "title_zh")]:
+            if self.page and folder != {"works": "works", "writings": "articles", "exhibitions": "exhibition_details"}.get(self.page):
+                continue
             for path in sorted((ROOT / "content" / folder).glob("*.json")):
                 data = build_site.load_json(path)
                 choice = f"{label}：{data[title_key]} ({path.stem})"
@@ -702,13 +719,14 @@ class PageTextForm(ScrollableForm):
         if hasattr(self, "selector") and self.selector.winfo_exists():
             self.selector.configure(values=list(self.documents))
 
-    def load_page(self) -> None:
+    def load_page(self, reload: bool = True) -> None:
         for child in self.body.winfo_children():
             child.destroy()
         self.widgets.clear()
         self.path = ROOT / "content" / self.documents[self.choice.get()]
-        self.original = self.path.read_text(encoding="utf-8")
-        self.data = json.loads(self.original)
+        if reload:
+            self.original = self.path.read_text(encoding="utf-8")
+            self.data = json.loads(self.original)
         fields = FormFields(self)
         fields.heading("編輯網頁文字", "可修改既有作品、文章與頁面。正文可新增、刪除、移動整段；儲存前會備份原檔，再重建網站。")
         fields.combobox("要修改的頁面", self.choice, list(self.documents))
@@ -721,7 +739,7 @@ class PageTextForm(ScrollableForm):
         specs = self.field_specs()
         for keys, label, mode in specs:
             value = self.get_value(keys)
-            widget = fields.text(label, height=14 if mode == "formatted" else 6 if mode == "long" else 3)
+            widget = fields.text(label, height=22 if mode == "chronology" else 14 if mode == "formatted" else 6 if mode == "long" else 3)
             text = self.field_text(value, mode)
             widget.insert("1.0", text)
             if mode == "formatted":
@@ -735,6 +753,9 @@ class PageTextForm(ScrollableForm):
                 ttk.Button(self.body, text="選擇圖片…", command=choose).grid(row=fields.row, column=1, sticky="w")
                 fields.row += 1
             self.widgets.append((keys, widget, mode))
+        if self.page == "chronology":
+            ttk.Button(self.body, text="新增年份…", command=self.add_chronology_year).grid(row=fields.row, column=1, sticky="w", pady=12)
+            fields.row += 1
         fields.actions(self.save, self.app.open_preview)
         self.canvas.yview_moveto(0)
 
@@ -748,6 +769,15 @@ class PageTextForm(ScrollableForm):
             "contact.json": [("intro", "聯絡頁簡介"), ("email", "電子郵件")],
         }
         specs = [((key,), label, "long") for key, label in groups.get(name, [])]
+        if name == "page_copy.json" and self.page:
+            specs = [spec for spec in specs if spec[0][0].startswith(self.page + "_")]
+        if name == "chronology.json":
+            specs = [(("intro_zh",), "中文簡介", "long"), (("intro_en",), "英文簡介", "long"),
+                     (("entries",), "年表（年份獨立一行，接著每行一件事件；空一行後輸入下一個年份）", "chronology")]
+            if self.page == "chronology":
+                specs = specs[:2]
+                specs.extend((("entries", index, "events"), f'{entry["year"]} 年事件（每行一件；留白不顯示該年）', "lines")
+                             for index, entry in enumerate(self.data["entries"]))
         if name == "classes.json":
             specs.append((("schedule",), "上課時間（每行一個時段）", "lines"))
             for index in range(len(self.data["features"])):
@@ -761,7 +791,7 @@ class PageTextForm(ScrollableForm):
                                 specs.append(((group, index, key), f"{label} {index + 1}", "text"))
         if self.data.get("kind") == "article":
             self.data.setdefault("title_lines", [])
-            specs = [(("title",), "文章標題（列表與搜尋用）", "text"), (("title_lines",), "標題顯示換行（每行一句；留白自動換行）", "lines"), (("date",), "日期 YYYY-MM-DD", "text"), (("summary",), "摘要", "long")]
+            specs = [(("title",), "文章標題（列表與搜尋用）", "text"), (("title_lines",), "標題顯示換行（每行一句；留白自動換行）", "lines"), (("date",), "日期 YYYY-MM-DD（也可只填四位數年份）", "text"), (("category",), "分類：創作筆記／藝術評論／作品故事／出版品（填一項）", "category"), (("summary",), "摘要", "long")]
             specs.append((("body",), "文章正文（支援格式）", "formatted"))
         if self.data.get("kind") == "work":
             for key in ("title_en", "catalog_number", "collection"):
@@ -787,8 +817,30 @@ class PageTextForm(ScrollableForm):
                           (("publication", "description"), "出版品介紹", "formatted")])
         return specs
 
+    def add_chronology_year(self) -> None:
+        year = simpledialog.askinteger("新增年份", "輸入四位數年份（儲存後自動由新到舊排列）：", parent=self, minvalue=1000, maxvalue=9999)
+        if year is None:
+            return
+        if any(str(item["year"]) == str(year) for item in self.data["entries"]):
+            messagebox.showinfo("年份已存在", "請直接修改該年份的事件欄位。")
+            return
+        # Keep all unsaved fields while adding another year to the form.
+        for keys, widget, mode in self.widgets:
+            target = self.data
+            for key in keys[:-1]:
+                target = target[key]
+            raw = widget.get("1.0", "end-1c")
+            target[keys[-1]] = [line.strip() for line in raw.splitlines() if line.strip()] if mode == "lines" else raw
+        self.data["entries"].append({"year": str(year), "events": []})
+        self.data["entries"].sort(key=lambda item: int(item["year"]), reverse=True)
+        self.load_page(reload=False)
+
     @staticmethod
     def field_text(value, mode: str) -> str:
+        if mode == "chronology":
+            return chronology.to_text(value)
+        if mode == "category":
+            return add_content.CATEGORIES[value][0]
         if mode == "formatted":
             return blocks_to_markup(value)
         return "\n".join(value) if mode == "lines" else str(value)
@@ -800,6 +852,8 @@ class PageTextForm(ScrollableForm):
         return value
 
     def has_changes(self) -> bool:
+        if self.page == "chronology" and self.data != json.loads(self.original):
+            return True
         for keys, widget, mode in self.widgets:
             old = self.get_value(keys)
             text = self.field_text(old, mode)
@@ -826,6 +880,21 @@ class PageTextForm(ScrollableForm):
             if raw == self.field_text(self.get_value(keys), mode):
                 continue  # Keep legacy blocks and intentional whitespace unchanged.
             raw = raw.strip()
+            if mode == "chronology":
+                try:
+                    target[keys[-1]] = chronology.from_text(raw)
+                except ValueError as error:
+                    messagebox.showerror("年表格式錯誤", str(error))
+                    return
+                continue
+            if mode == "category":
+                if raw not in CATEGORY_LABELS:
+                    messagebox.showerror("分類錯誤", "請填入創作筆記、藝術評論、作品故事或出版品。")
+                    return
+                category = CATEGORY_LABELS[raw]
+                updated["category"] = category
+                updated["category_zh"], updated["category_en"] = add_content.CATEGORIES[category]
+                continue
             if mode == "formatted":
                 try:
                     target[keys[-1]] = parse_markup(raw)
@@ -837,13 +906,15 @@ class PageTextForm(ScrollableForm):
         if updated.get("kind") == "work" and not updated["title_zh"]:
             messagebox.showerror("資料格式錯誤", "作品中文名不能空白。")
             return
+        if self.page == "chronology":
+            updated["entries"].sort(key=lambda item: int(item["year"]), reverse=True)
         if updated.get("kind") == "article":
             try:
-                date.fromisoformat(updated["date"])
+                build_site.date_display(updated["date"])
                 if not updated["title"]:
                     raise ValueError()
             except ValueError:
-                messagebox.showerror("資料格式錯誤", "文章標題不能空白，日期請填 YYYY-MM-DD。")
+                messagebox.showerror("資料格式錯誤", "文章標題不能空白，日期請填 YYYY-MM-DD 或四位數年份。")
                 return
         if not messagebox.askyesno("儲存修改", f"確認更新「{self.loaded_choice}」並重新產生網站？"):
             return
@@ -882,9 +953,10 @@ class PageTextForm(ScrollableForm):
 class PageImageForm(ScrollableForm):
     """Choose a page and replace its image without editing templates or JSON."""
 
-    def __init__(self, parent: ttk.Notebook, app: "ContentManager") -> None:
+    def __init__(self, parent: ttk.Notebook, app: "ContentManager", page: str | None = None) -> None:
         super().__init__(parent)
         self.app = app
+        self.page = page
         self.choice = StringVar(value=PAGE_IMAGE_LABELS["home"])
         self.image_path = StringVar()
         self.image_alt = StringVar()
@@ -904,6 +976,7 @@ class PageImageForm(ScrollableForm):
         fields.entry("圖片說明", self.image_alt, required=True, hint="請簡單描述圖片內容，供輔助閱讀及圖片放大時使用。")
         fields.actions(self.save, app.open_preview)
         self.refresh_choices()
+        self.choice.set(next(iter(self.targets)))
         self.load_page()
 
     def refresh_choices(self) -> None:
@@ -911,12 +984,15 @@ class PageImageForm(ScrollableForm):
         targets = {
             label: (ROOT / "content/page_images.json", key, "image", "alt")
             for key, label in PAGE_IMAGE_LABELS.items()
+            if not self.page or key == self.page or key.startswith(self.page + "_") or (self.page == "about" and key == "philosophy")
         }
         for folder, label, image_key, alt_key in [
             ("works", "作品主圖", "image", "alt"),
             ("articles", "文章封面", "image", "image_alt"),
             ("exhibition_details", "展覽封面", "cover_image", "cover_alt"),
         ]:
+            if self.page and folder != {"works": "works", "writings": "articles", "exhibitions": "exhibition_details"}.get(self.page):
+                continue
             for path in sorted((ROOT / "content" / folder).glob("*.json")):
                 data = build_site.load_json(path)
                 title = data.get("title_zh") or data.get("title") or path.stem
@@ -1037,16 +1113,21 @@ class ContentManager(Tk):
 
         notebook = ttk.Notebook(self)
         notebook.pack(fill="both", expand=True, padx=18, pady=(0, 10))
-        create_tabs = ttk.Notebook(notebook)
-        edit_tabs = ttk.Notebook(notebook)
-        notebook.add(edit_tabs, text="  修改既有內容  ")
-        notebook.add(create_tabs, text="  新增內容  ")
+        for page, label in [("home", "首頁"), ("about", "關於"), ("chronology", "大事記"),
+                            ("works", "作品"), ("exhibitions", "展覽"), ("classes", "教學"),
+                            ("writings", "文章／出版品"), ("contact", "聯絡")]:
+            page_tabs = ttk.Notebook(notebook)
+            notebook.add(page_tabs, text=f" {label} ")
+            page_tabs.add(PageTextForm(page_tabs, self, page), text="  編輯內容  ")
+            if page != "chronology":
+                page_tabs.add(PageImageForm(page_tabs, self, page), text="  封面與圖片  ")
+            if page == "works":
+                page_tabs.add(WorkForm(page_tabs, self), text="  新增作品  ")
+            elif page == "exhibitions":
+                page_tabs.add(ExhibitionForm(page_tabs, self), text="  新增／當期展覽  ")
+            elif page == "writings":
+                page_tabs.add(ArticleForm(page_tabs, self), text="  新增文章／出版品  ")
         notebook.add(MaintenancePanel(notebook, self), text="  預覽與維護  ")
-        create_tabs.add(WorkForm(create_tabs, self), text="  作品  ")
-        create_tabs.add(ExhibitionForm(create_tabs, self), text="  展覽／當期展覽  ")
-        create_tabs.add(ArticleForm(create_tabs, self), text="  文章  ")
-        edit_tabs.add(PageTextForm(edit_tabs, self), text="  文字／作品／文章／展覽  ")
-        edit_tabs.add(PageImageForm(edit_tabs, self), text="  封面與圖片  ")
 
         self.progress = ttk.Progressbar(self, mode="indeterminate")
         self.progress.pack(fill="x", padx=18, pady=(0, 4))

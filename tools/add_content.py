@@ -21,6 +21,7 @@ CATEGORIES = {
     "art-criticism": ("藝術評論", "Art Criticism"),
     "painting-notes": ("創作筆記", "Painting Notes"),
     "artwork-story": ("作品故事", "Artwork Story"),
+    "publications": ("出版品", "Publications"),
 }
 
 
@@ -73,12 +74,12 @@ def save_record(folder: str, slug: str, record: dict, force: bool) -> Path:
 def add_article(args: argparse.Namespace) -> Path:
     slug = validate_slug(ask(args.slug, "網址代稱 slug"))
     title = ask(args.title, "文章標題")
-    article_date = ask(args.date, "日期 YYYY-MM-DD", date.today().isoformat())
+    article_date = ask(args.date, "日期 YYYY-MM-DD（或四位數年份）", date.today().isoformat())
     try:
-        date.fromisoformat(article_date)
+        build_site.date_display(article_date)
     except ValueError as error:
-        raise SystemExit("日期格式需為 YYYY-MM-DD") from error
-    category = ask(args.category, "分類 art-criticism / painting-notes / artwork-story", "painting-notes")
+        raise SystemExit("日期格式需為 YYYY-MM-DD 或四位數年份") from error
+    category = ask(args.category, "分類 art-criticism / painting-notes / artwork-story / publications", "painting-notes")
     if category not in CATEGORIES:
         raise SystemExit(f"分類必須是：{', '.join(CATEGORIES)}")
     image = prepare_image(ask(args.image, "主圖檔名或完整路徑"))

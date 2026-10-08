@@ -320,6 +320,22 @@ def build_about(site: dict[str, Any]) -> None:
     )
 
 
+def build_chronology(site: dict[str, Any]) -> None:
+    data = load_json(CONTENT / "chronology.json")
+    entries = []
+    for entry in sorted(data["entries"], key=lambda item: int(item["year"]), reverse=True):
+        if not entry["events"]:
+            continue
+        events = "".join(f'<li>{escape(event)}</li>' for event in entry["events"])
+        entries.append(f'<section class="chronology-year"><h2>{escape(entry["year"])}</h2><ul>{events}</ul></section>')
+    main = render(read_text(TEMPLATES / "chronology.html"),
+                  intro_zh=escape(data["intro_zh"]), intro_en=escape(data["intro_en"]),
+                  entries="".join(entries))
+    write_page("about/chronology/index.html", title=f"年表．大事記｜{site['name_zh']}",
+               description=data["intro_zh"], main=main, root="../../",
+               active="about", body_class="page-about page-chronology")
+
+
 def work_card(work: dict[str, Any], root: str) -> str:
     search = " ".join(
         str(work.get(key, ""))
@@ -680,6 +696,9 @@ def build_classes(site: dict[str, Any]) -> None:
 
 
 def date_display(value: str) -> str:
+    # A publication may supply only its year; do not invent a month or day.
+    if re.fullmatch(r"[0-9]{4}", value) and 1 <= int(value) <= 9999:
+        return value
     return datetime.strptime(value, "%Y-%m-%d").strftime("%Y.%m.%d")
 
 
@@ -764,7 +783,7 @@ def build_writings(site: dict[str, Any], articles: list[dict[str, Any]]) -> None
             main=detail,
             root="../../",
             active="writings",
-            body_class="page-article-detail",
+            body_class="page-article-detail" + (" page-publication" if article["category"] == "publications" else ""),
             social_image=article["image"],
         )
 
@@ -791,7 +810,7 @@ def build_contact(site: dict[str, Any]) -> None:
         intro=escape(data["intro"]),
         email=escape(data["email"]),
         official_url=escape(data["official_url"]),
-        logo_image=page_image("contact_logo", "../", "90px"),
+        logo_image=page_image("contact_logo", "../", "225px"),
         official_cards=cards("official"),
         artist_cards=cards("artist"),
     )
@@ -870,6 +889,7 @@ def _build_current(progress=None) -> BuildReport:
 
     build_home(site)
     build_about(site)
+    build_chronology(site)
     build_works(site, works)
     build_exhibitions(site, works, exhibition_details)
     build_classes(site)
