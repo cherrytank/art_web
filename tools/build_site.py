@@ -18,9 +18,10 @@ from typing import Any
 
 from image_pipeline import ImageBuildReport, ResponsiveImage, build_responsive_images
 from content_format import plain_summary, render_blocks
+from project_paths import get_project_root
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = get_project_root()
 CONTENT = ROOT / "content"
 TEMPLATES = ROOT / "templates"
 DIST = ROOT / "dist"

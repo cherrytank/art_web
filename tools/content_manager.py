@@ -24,9 +24,10 @@ from page_images import PAGE_IMAGE_LABELS, import_page_image
 from content_format import EXAMPLES, blocks_to_markup, parse_markup
 from local_jobs import LocalJob
 import chronology
+from project_paths import get_project_root
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = get_project_root()
 CATEGORY_LABELS = {
     "創作筆記": "painting-notes",
     "藝術評論": "art-criticism",
@@ -601,20 +602,21 @@ class ExhibitionForm(ScrollableForm):
 
 
 class ArticleForm(ScrollableForm):
-    def __init__(self, parent: ttk.Notebook, app: "ContentManager") -> None:
+    def __init__(self, parent: ttk.Notebook, app: "ContentManager", default_category: str = "創作筆記") -> None:
         super().__init__(parent)
         self.app = app
+        self.default_category = default_category
         self.values = {
             "slug": StringVar(),
             "title": StringVar(),
             "date": StringVar(value=date.today().isoformat()),
-            "category": StringVar(value="創作筆記"),
+            "category": StringVar(value=default_category),
             "image": StringVar(),
             "image_alt": StringVar(),
             "summary": StringVar(),
         }
         fields = FormFields(self)
-        fields.heading("新增文章", "填寫標題、分類與正文。每個空白行會自動分成新的文章段落。")
+        fields.heading("新增出版品" if default_category == "出版品" else "新增文章", "填寫標題、分類與正文。每個空白行會自動分成新的段落。")
         fields.entry("網址代稱", self.values["slug"], hint="可留白自動產生；若自行填寫，請使用英文小寫、數字與連字號。")
         fields.entry("文章標題", self.values["title"], required=True)
         self.title_lines = fields.text("標題顯示換行", height=3, hint="選填：輸入完整標題，按 Enter 指定換行；留白由網頁自動換行。列表仍使用上方文章標題。")
@@ -684,7 +686,7 @@ class ArticleForm(ScrollableForm):
         for variable in self.values.values():
             variable.set("")
         self.values["date"].set(date.today().isoformat())
-        self.values["category"].set("創作筆記")
+        self.values["category"].set(self.default_category)
         self.body_text.delete("1.0", "end")
         self.title_lines.delete("1.0", "end")
         self.canvas.yview_moveto(0)
@@ -705,7 +707,7 @@ class PageTextForm(ScrollableForm):
             "年表．大事記": "chronology.json",
         }
         self.refresh_documents()
-        self.choice.set(next(iter(self.documents)))
+        self.choice.set(next(iter(self.documents), ""))
         self.widgets: list[tuple[tuple, Text, str]] = []
         self.load_page()
 
@@ -718,17 +720,23 @@ class PageTextForm(ScrollableForm):
                 "home": {"site.json"}, "about": {"about.json"},
                 "works": {"page_copy.json"}, "exhibitions": {"page_copy.json"},
                 "classes": {"classes.json"}, "writings": {"page_copy.json"},
-                "contact": {"contact.json"}, "chronology": {"chronology.json"},
+                "contact": {"contact.json"}, "chronology": {"chronology.json"}, "publications": set(),
             }[self.page]
             if "page_copy.json" in allowed:
                 self.documents = {"頁面簡介": "page_copy.json"}
             self.documents = {key: value for key, value in self.documents.items() if value in allowed}
         for folder, label, title_key in [("articles", "文章", "title"), ("works", "作品", "title_zh"), ("exhibition_details", "展覽", "title_zh")]:
-            if self.page and folder != {"works": "works", "writings": "articles", "exhibitions": "exhibition_details"}.get(self.page):
+            if self.page and folder != {"works": "works", "writings": "articles", "publications": "articles", "exhibitions": "exhibition_details"}.get(self.page):
                 continue
             for path in sorted((ROOT / "content" / folder).glob("*.json")):
                 data = build_site.load_json(path)
-                choice = f"{label}：{data[title_key]} ({path.stem})"
+                is_publication = data.get("category") == "publications"
+                if self.page == "publications" and not is_publication:
+                    continue
+                if self.page == "writings" and is_publication:
+                    continue
+                record_label = "出版品" if is_publication else label
+                choice = f"{record_label}：{data[title_key]} ({path.stem})"
                 relative = f"{folder}/{path.name}"
                 self.documents[choice] = relative
                 if relative == previous_path:
@@ -741,13 +749,22 @@ class PageTextForm(ScrollableForm):
         for child in self.body.winfo_children():
             child.destroy()
         self.widgets.clear()
+        if not self.documents:
+            self.path = None
+            fields = FormFields(self)
+            fields.heading("尚無出版品", "請按上方「＋新增出版品」。新增後可在此修改書名、年份、介紹及封面。")
+            for child in self.action_bar.winfo_children():
+                child.destroy()
+            return
+        if self.choice.get() not in self.documents:
+            self.choice.set(next(iter(self.documents)))
         self.path = ROOT / "content" / self.documents[self.choice.get()]
         if reload:
             self.original = self.path.read_text(encoding="utf-8")
             self.data = json.loads(self.original)
         fields = FormFields(self)
         fields.heading("編輯內容", "選擇項目後修改。文字與主圖一起儲存；原檔會自動備份。")
-        if len(self.documents) > 1:
+        if len(self.documents) > 1 or self.page == "publications":
             fields.combobox("編輯項目", self.choice, list(self.documents))
         for child in self.body.winfo_children():
             if isinstance(child, ttk.Combobox):
@@ -891,6 +908,8 @@ class PageTextForm(ScrollableForm):
         return value
 
     def has_changes(self) -> bool:
+        if self.path is None:
+            return False
         if self.page == "chronology" and self.data != json.loads(self.original):
             return True
         for keys, widget, mode in self.widgets:
@@ -948,6 +967,9 @@ class PageTextForm(ScrollableForm):
         if self.page == "chronology":
             updated["entries"].sort(key=lambda item: int(item["year"]), reverse=True)
         if updated.get("kind") == "article":
+            # An unchanged manual line-break title must not mask a renamed book.
+            if updated["title"] != self.data["title"] and updated.get("title_lines") == self.data.get("title_lines"):
+                updated["title_lines"] = []
             try:
                 build_site.date_display(updated["date"])
                 if not updated["title"]:
@@ -1133,7 +1155,7 @@ class MaintenancePanel(ttk.Frame):
 
 PAGE_SECTIONS = [("home", "首頁"), ("about", "關於"), ("chronology", "大事記"),
                  ("works", "作品"), ("exhibitions", "展覽"), ("classes", "油畫教學"),
-                 ("writings", "文章／出版品"), ("contact", "聯絡我們"), ("maintenance", "預覽與維護")]
+                 ("writings", "藝評／文章"), ("publications", "出版品"), ("contact", "聯絡我們"), ("maintenance", "預覽與維護")]
 
 
 def form_snapshot(form) -> tuple:
@@ -1194,10 +1216,10 @@ class ManagerWorkspace(ttk.Frame):
         tasks = [("edit", "編輯內容")]
         if page == "maintenance":
             tasks = [("maintenance", "預覽與維護")]
-        elif page != "chronology":
+        elif page not in {"chronology", "publications"}:
             tasks.append(("images", "頁面封面／圖片"))
-        if page in {"works", "exhibitions", "writings"}:
-            tasks.append(("new", {"works": "＋新增作品", "exhibitions": "＋新增展覽", "writings": "＋新增文章／出版品"}[page]))
+        if page in {"works", "exhibitions", "writings", "publications"}:
+            tasks.append(("new", {"works": "＋新增作品", "exhibitions": "＋新增展覽", "writings": "＋新增文章", "publications": "＋新增出版品"}[page]))
         if page == "exhibitions":
             tasks.append(("current", "指定當期展覽"))
         self.task_buttons = {}
@@ -1223,7 +1245,7 @@ class ManagerWorkspace(ttk.Frame):
             elif task == "current":
                 form = ExhibitionForm(self.content, self.app, mode="current")
             else:
-                constructor = {"works": WorkForm, "writings": ArticleForm, "exhibitions": partial(ExhibitionForm, mode="new")}[self.page]
+                constructor = {"works": WorkForm, "writings": ArticleForm, "publications": partial(ArticleForm, default_category="出版品"), "exhibitions": partial(ExhibitionForm, mode="new")}[self.page]
                 form = constructor(self.content, self.app)
             self.forms[key] = form
             self.baselines[key] = form_snapshot(form)
@@ -1232,6 +1254,8 @@ class ManagerWorkspace(ttk.Frame):
             form.refresh_current_choices()
         elif task == "edit":
             form.refresh_documents()
+            if form.path is None or (not form.has_changes() and form.choice.get() not in form.documents):
+                form.load_page()
         self.forms[key].pack(fill="both", expand=True)
         self.active_key = key
         self.last_tasks[self.page] = task

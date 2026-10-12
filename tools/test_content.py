@@ -146,6 +146,49 @@ class EditorTests(unittest.TestCase):
             self.assertFalse(self.panel.has_changes(), choice)
             self.assertTrue(self.panel.widgets, choice)
 
+    def test_publication_editor_saves_title_year_body_cover_and_backup(self):
+        panel = self.manager.PageTextForm(self.manager.ttk.Notebook(self.window), self.app, "publications")
+        self.assertEqual(len(panel.documents), 1)
+        self.assertTrue(panel.choice.get().startswith("出版品："))
+        original = panel.original
+        incoming = self.make_image(self.root / "incoming-publication", "blue")
+        changes = {("title",): "修改後的作品集", ("date",): "2024", ("body",): "## 出版介紹\n\n新的正文", ("image",): str(incoming)}
+        for keys, widget, mode in panel.widgets:
+            if keys not in changes:
+                continue
+            if isinstance(widget, self.manager.Text):
+                widget.delete("1.0", "end")
+                widget.insert("1.0", changes[keys])
+            else:
+                widget.input_variable.set(changes[keys])
+        with patch.object(self.manager.messagebox, "askyesno", return_value=True), patch.object(self.manager.messagebox, "showerror") as error:
+            panel.save()
+        error.assert_not_called()
+        saved = json.loads(panel.original)
+        self.assertEqual(saved["title"], "修改後的作品集")
+        self.assertEqual(saved["title_lines"], [])
+        self.assertEqual(build_site.display_title(saved), "修改後的作品集")
+        self.assertEqual(saved["date"], "2024")
+        self.assertEqual(saved["category"], "publications")
+        self.assertEqual(saved["body"], parse_markup(changes[("body",)]))
+        self.assertTrue((self.root / "static/assets/images" / saved["image"]).is_file())
+        self.assertFalse(panel.has_changes())
+        self.assertTrue(any(path.read_text(encoding="utf-8") == original for path in (self.root / ".codex-work/content-backups").rglob("*.json")))
+
+    def test_empty_publications_editor_discovers_new_record(self):
+        path = self.root / "content/articles/heaven-earth-2021.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["category"] = "painting-notes"
+        path.write_text(json.dumps(data), encoding="utf-8")
+        panel = self.manager.PageTextForm(self.manager.ttk.Notebook(self.window), self.app, "publications")
+        self.assertIsNone(panel.path)
+        self.assertFalse(panel.has_changes())
+        data["category"] = "publications"
+        path.write_text(json.dumps(data), encoding="utf-8")
+        panel.refresh_documents()
+        panel.load_page()
+        self.assertEqual(panel.data["category"], "publications")
+
     def test_page_scopes_only_list_related_content_and_images(self):
         for page in ["home", "about", "chronology", "works", "exhibitions", "classes", "writings", "contact"]:
             with self.subTest(page=page):

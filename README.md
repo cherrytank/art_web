@@ -4,6 +4,24 @@
 
 ## 最簡單的操作方式：內容管理視窗
 
+### 直接開啟 Windows EXE
+
+雙擊 `release/SiteContentManager.exe` 即可使用，不必安裝 Python。請保留網站的 `content`、`templates`、`static` 等資料夾；EXE 是編輯器，不是整個網站的備份。EXE 放在專案根目錄或 `release` 資料夾內會自動找到資料；放在其他位置則會請你選擇網站資料夾。視窗標題會顯示正在編輯的路徑。
+
+左側「出版品 → 編輯內容」可修改書名、年份、摘要、正文與封面；「＋新增出版品」預設就是出版品分類。修改書名且未另改標題換行時，會自動清除舊的手動換行標題，避免詳細頁仍顯示舊書名。網站上的出版品分類及既有網址不變。
+
+EXE 僅更新本機檔案，不會自動推送 GitHub。目前為未簽章的 Windows x64 程式，Windows 可能提示來源未知，請先確認檔案來源。`release/` 已排除 Git，避免將建置檔送上 GitHub Pages。
+
+程式碼修改後需重新打包 EXE；只修改網站文案或圖片則不用。打包指令（Windows）：
+
+```powershell
+python -m venv .codex-work/exe-venv
+./.codex-work/exe-venv/Scripts/python.exe -m pip install -r requirements-exe.txt
+./.codex-work/exe-venv/Scripts/python.exe tools/build_exe.py
+```
+
+### 使用 Python 開啟
+
 第一次使用先安裝圖片處理套件：
 
 ```powershell

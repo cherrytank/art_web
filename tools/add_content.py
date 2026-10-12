@@ -12,9 +12,10 @@ from pathlib import Path
 import build_site
 from image_pipeline import SUPPORTED_EXTENSIONS
 from content_format import parse_markup
+from project_paths import get_project_root
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = get_project_root()
 ASSET_DIR = ROOT / "static" / "assets" / "images"
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 CATEGORIES = {

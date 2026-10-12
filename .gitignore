@@ -3,6 +3,7 @@
 /.playwright-cli/
 /output/playwright/
 /dist/
+/release/
 __pycache__/
 *.py[cod]
 
