@@ -1,19 +1,26 @@
 const menuButton = document.querySelector('.menu-toggle');
 const siteNav = document.querySelector('.site-nav');
 
-// 桌面支援滑鼠移入；觸控與鍵盤使用同一個展開按鈕。
+// 主標題保留一般連結；手機直接顯示子項目，避免點擊連結時攔截導覽。
 const navGroups = [...document.querySelectorAll('.nav-group')];
+const touchNavigation = window.matchMedia('(hover: none)');
+const showAllSubmenus = () => window.innerWidth <= 1050 || touchNavigation.matches;
 function closeSubmenus() {
   navGroups.forEach(group => {
-    group.querySelector('.submenu-toggle').setAttribute('aria-expanded', 'false');
-    group.querySelector('.nav-submenu').hidden = true;
+    group.querySelector('.submenu-toggle').setAttribute('aria-expanded', String(showAllSubmenus()));
+    group.querySelector('.nav-submenu').hidden = !showAllSubmenus();
   });
 }
 navGroups.forEach(group => {
   const button = group.querySelector('.submenu-toggle');
   const submenu = group.querySelector('.nav-submenu');
   const open = () => { closeSubmenus(); button.setAttribute('aria-expanded', 'true'); submenu.hidden = false; };
-  button.addEventListener('click', () => { if (submenu.hidden) open(); else closeSubmenus(); });
+  button.addEventListener('focus', () => { if (!showAllSubmenus()) open(); });
+  button.addEventListener('keydown', event => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault(); open(); submenu.querySelector('a').focus();
+    }
+  });
   group.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse' && window.innerWidth > 1050) open(); });
   group.addEventListener('pointerleave', event => { if (event.pointerType === 'mouse' && !group.contains(document.activeElement)) closeSubmenus(); });
   group.addEventListener('focusout', event => { if (!group.contains(event.relatedTarget)) closeSubmenus(); });
@@ -21,6 +28,9 @@ navGroups.forEach(group => {
     if (event.key === 'Escape') { event.stopPropagation(); closeSubmenus(); button.focus(); }
   });
 });
+closeSubmenus();
+window.addEventListener('resize', closeSubmenus);
+touchNavigation.addEventListener('change', closeSubmenus);
 document.addEventListener('click', event => { if (!event.target.closest('.nav-group')) closeSubmenus(); });
 
 if (menuButton && siteNav) {
