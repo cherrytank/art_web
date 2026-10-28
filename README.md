@@ -12,13 +12,21 @@
 
 一般儲存僅更新本機檔案；「預覽與維護 → 提交並發布到 GitHub」才會在確認後提交、推送。目前為未簽章的 Windows x64 程式，Windows 可能提示來源未知，請先確認檔案來源。`release/` 已排除 Git，避免將建置檔送上 GitHub Pages。三台電腦都必須換成新版 EXE，單純拉取程式碼不會更新舊 EXE。
 
-程式碼修改後需重新打包 EXE；只修改網站文案或圖片則不用。打包指令（Windows）：
+程式碼修改後需重新打包 EXE；只修改網站文案或圖片則不用。先關閉舊的內容管理器，在專案資料夾開啟 PowerShell 或命令提示字元，執行一個指令：
 
 ```powershell
-python -m venv .codex-work/exe-venv
-./.codex-work/exe-venv/Scripts/python.exe -m pip install -r requirements-exe.txt
-./.codex-work/exe-venv/Scripts/python.exe tools/build_exe.py
+python tools/build_exe.py
 ```
+
+程式會自動建立專用 Python 環境、檢查 Tk 視窗元件、安裝打包套件，再產生 `release/SiteContentManager.exe`，不需要啟用虛擬環境或使用 BAT。首次安裝需要網路。若電腦使用 `py` 啟動 Python，指令開頭改成 `py` 即可。
+
+如果終端機不在專案資料夾，也可以使用完整路徑（其他電腦請換成自己的位置）：
+
+```powershell
+python "F:\program\web\tools\build_exe.py"
+```
+
+打包過程會即時顯示進度，完整紀錄存於 `.codex-work/logs/build-exe.log`（每次打包覆寫）。失敗時請提供這份 Log；出現「打包完成」才表示新版 EXE 已產生。如果 Python 本身無法執行，尚未進入打包程式，請提供終端機的錯誤文字。若顯示找不到 `tools/build_exe.py`，請使用上面的完整路徑；若顯示 EXE 被占用，請先關閉舊管理器再打包。
 
 ### 使用 Python 開啟
 
