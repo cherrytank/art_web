@@ -220,6 +220,7 @@ def write_page(
         current_exhibition_url=escape(current_exhibition_url(root)),
         css_version=hashlib.sha256((ROOT / "static/css/styles.css").read_bytes()).hexdigest()[:16],
         js_version=hashlib.sha256((ROOT / "static/js/site.js").read_bytes()).hexdigest()[:16],
+        update_version=hashlib.sha256((ROOT / "static/js/update-check.js").read_bytes()).hexdigest()[:16],
         body_class=body_class,
         main=main,
         year=date.today().year,
@@ -841,6 +842,22 @@ def build_contact(site: dict[str, Any]) -> None:
 _BUILD_LOCK = threading.Lock()
 
 
+def stamp_site_version(destination: Path) -> str:
+    """依整站產物產生一致版本，最後才寫入版本清單，隨整站一起發布。"""
+    digest = hashlib.sha256()
+    for path in sorted(destination.rglob("*")):
+        if path.is_file() and path.name != "site-version.json":
+            digest.update(path.relative_to(destination).as_posix().encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(path.read_bytes())
+    version = digest.hexdigest()[:16]
+    for path in destination.rglob("*.html"):
+        text = path.read_text(encoding="utf-8")
+        path.write_text(text.replace("__SITE_BUILD_VERSION__", version), encoding="utf-8")
+    (destination / "site-version.json").write_text(json.dumps({"version": version}), encoding="utf-8")
+    return version
+
+
 def build(progress=None) -> BuildReport:
     """Publish a complete local build only after all generation succeeds."""
     global DIST, RESPONSIVE_OUTPUT
@@ -909,6 +926,7 @@ def _build_current(progress=None) -> BuildReport:
     build_writings(site, articles)
     build_contact(site)
     (DIST / ".nojekyll").write_text("", encoding="utf-8")
+    stamp_site_version(DIST)
 
     page_count = len(list(DIST.rglob("*.html")))
     report = BuildReport(page_count=page_count, images=image_report)

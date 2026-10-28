@@ -14,11 +14,22 @@ function closeSubmenus() {
 navGroups.forEach(group => {
   const button = group.querySelector('.submenu-toggle');
   const submenu = group.querySelector('.nav-submenu');
-  const open = () => { closeSubmenus(); button.setAttribute('aria-expanded', 'true'); submenu.hidden = false; };
+  let pointerInside = false;
+  let closeTimer;
+  const cancelClose = () => { clearTimeout(closeTimer); };
+  const open = () => { cancelClose(); closeSubmenus(); button.setAttribute('aria-expanded', 'true'); submenu.hidden = false; };
   // 離開某一組時只關閉該組，避免舊焦點事件關閉正在點擊的新選單。
   const close = () => {
+    cancelClose();
     button.setAttribute('aria-expanded', String(showAllSubmenus()));
     submenu.hidden = !showAllSubmenus();
+  };
+  // 焦點在滑鼠按下時可能先變成空值；等焦點穩定後再判斷，避免吃掉 click。
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimer = setTimeout(() => {
+      if (!pointerInside && !group.contains(document.activeElement)) close();
+    }, 180);
   };
   button.addEventListener('focus', () => { if (!showAllSubmenus()) open(); });
   button.addEventListener('keydown', event => {
@@ -26,16 +37,27 @@ navGroups.forEach(group => {
       event.preventDefault(); open(); submenu.querySelector('a').focus();
     }
   });
-  group.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse' && window.innerWidth > 1050) open(); });
-  group.addEventListener('pointerleave', event => { if (event.pointerType === 'mouse' && !group.contains(document.activeElement)) close(); });
-  group.addEventListener('focusout', event => { if (!group.contains(event.relatedTarget)) close(); });
+  group.addEventListener('pointerenter', event => {
+    if (event.pointerType === 'mouse') { pointerInside = true; if (!showAllSubmenus()) open(); }
+  });
+  group.addEventListener('pointerleave', event => {
+    if (event.pointerType === 'mouse') { pointerInside = false; scheduleClose(); }
+  });
+  group.addEventListener('focusin', cancelClose);
+  group.addEventListener('focusout', event => { if (!group.contains(event.relatedTarget)) scheduleClose(); });
   group.addEventListener('keydown', event => {
     if (event.key === 'Escape') { event.stopPropagation(); button.focus(); close(); }
   });
 });
 closeSubmenus();
-window.addEventListener('resize', closeSubmenus);
-touchNavigation.addEventListener('change', closeSubmenus);
+// 只有跨越手機／桌面模式時才重設，避免瀏覽器工具列伸縮造成選單突然消失。
+let expandedNavigation = showAllSubmenus();
+function updateNavigationMode() {
+  const next = showAllSubmenus();
+  if (next !== expandedNavigation) { expandedNavigation = next; closeSubmenus(); }
+}
+window.addEventListener('resize', updateNavigationMode);
+touchNavigation.addEventListener('change', updateNavigationMode);
 document.addEventListener('click', event => { if (!event.target.closest('.nav-group')) closeSubmenus(); });
 
 if (menuButton && siteNav) {

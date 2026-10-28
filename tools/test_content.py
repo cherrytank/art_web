@@ -67,6 +67,7 @@ class ContentTests(unittest.TestCase):
             script = root / "static/js/site.js"
             script.parent.mkdir(parents=True)
             script.write_text("// 測試", encoding="utf-8")
+            (script.parent / "update-check.js").write_text("// 版本檢查", encoding="utf-8")
             with patch.object(build_site, "ROOT", root), patch.object(build_site, "DIST", root / "dist"):
                 def generate():
                     build_site.write_page("index.html", title="Test", description="Test", main="<h1>Test</h1>", root="", active="home", body_class="page-home")
@@ -77,6 +78,20 @@ class ContentTests(unittest.TestCase):
                 self.assertEqual(generate(), first)
                 css.write_text("p { font-size: 14px; }", encoding="utf-8")
                 self.assertNotEqual(generate(), first)
+
+    def test_site_version_is_shared_and_changes_with_content(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            def generate(text):
+                for name in ("index.html", "about.html"):
+                    (root / name).write_text('__SITE_BUILD_VERSION__' + text, encoding="utf-8")
+                return build_site.stamp_site_version(root)
+            first = generate("原始內容")
+            self.assertEqual(json.loads((root / "site-version.json").read_text())["version"], first)
+            for name in ("index.html", "about.html"):
+                self.assertIn(first, (root / name).read_text(encoding="utf-8"))
+            self.assertEqual(first, generate("原始內容"))
+            self.assertNotEqual(first, generate("修改內容"))
 
     def test_work_numbers_are_numeric_ascending_before_year(self):
         works = [

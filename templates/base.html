@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="{{description}}">
   <meta name="theme-color" content="#f4f0e9">
+  <meta name="site-build" content="__SITE_BUILD_VERSION__">
   <script>document.documentElement.classList.add('js')</script>
   {{social_meta}}
   <title>{{title}}</title>
@@ -67,5 +68,6 @@
     </div>
   </dialog>
   <script src="{{root}}assets/js/site.js?v={{js_version}}" defer></script>
+  <script src="{{root}}assets/js/update-check.js?v={{update_version}}" data-site-root="{{root}}" defer></script>
 </body>
 </html>
