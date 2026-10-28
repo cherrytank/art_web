@@ -72,7 +72,8 @@ a { color: inherit; }
 .site-nav span { letter-spacing: .14em; transition: transform .2s ease; }
 .site-nav a:hover span, .site-nav a:focus-visible span { transform: translateY(-2px); }
 .site-nav small { margin-top: 3px; font-size: .74rem; letter-spacing: .02em; }
-.menu-toggle { display: none; }
+.menu-toggle { display: none; color: var(--ink); appearance: none; -webkit-appearance: none; }
+.menu-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 .nav-group { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
 .submenu-toggle { position: relative; padding: 0 0 7px; border: 0; background: transparent; color: inherit; font: inherit; text-align: center; white-space: nowrap; cursor: pointer; }
 .submenu-toggle::after { content: ""; position: absolute; left: 50%; right: 50%; bottom: 0; height: 1px; background: currentColor; transition: left .2s ease, right .2s ease; }
