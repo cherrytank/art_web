@@ -166,6 +166,16 @@ def load_records(folder: str) -> list[dict[str, Any]]:
     return records
 
 
+def current_exhibition_url(root: str) -> str:
+    """導向第一個有詳細頁的當期展覽；從缺時回到展覽資訊。"""
+    detail_slugs = {item["slug"] for item in load_records("exhibition_details")}
+    for item in load_json(CONTENT / "exhibitions.json"):
+        slug = item.get("slug")
+        if item.get("current") and slug in detail_slugs:
+            return f"{root}exhibitions/{slug}/index.html"
+    return f"{root}exhibitions/index.html"
+
+
 def write_page(
     output: str,
     *,
@@ -207,6 +217,7 @@ def write_page(
         title=escape(title),
         description=escape(description),
         root=root,
+        current_exhibition_url=escape(current_exhibition_url(root)),
         css_version=hashlib.sha256((ROOT / "static/css/styles.css").read_bytes()).hexdigest()[:16],
         js_version=hashlib.sha256((ROOT / "static/js/site.js").read_bytes()).hexdigest()[:16],
         body_class=body_class,

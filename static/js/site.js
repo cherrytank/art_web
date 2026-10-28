@@ -15,6 +15,11 @@ navGroups.forEach(group => {
   const button = group.querySelector('.submenu-toggle');
   const submenu = group.querySelector('.nav-submenu');
   const open = () => { closeSubmenus(); button.setAttribute('aria-expanded', 'true'); submenu.hidden = false; };
+  // 離開某一組時只關閉該組，避免舊焦點事件關閉正在點擊的新選單。
+  const close = () => {
+    button.setAttribute('aria-expanded', String(showAllSubmenus()));
+    submenu.hidden = !showAllSubmenus();
+  };
   button.addEventListener('focus', () => { if (!showAllSubmenus()) open(); });
   button.addEventListener('keydown', event => {
     if (event.key === 'ArrowDown') {
@@ -22,10 +27,10 @@ navGroups.forEach(group => {
     }
   });
   group.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse' && window.innerWidth > 1050) open(); });
-  group.addEventListener('pointerleave', event => { if (event.pointerType === 'mouse' && !group.contains(document.activeElement)) closeSubmenus(); });
-  group.addEventListener('focusout', event => { if (!group.contains(event.relatedTarget)) closeSubmenus(); });
+  group.addEventListener('pointerleave', event => { if (event.pointerType === 'mouse' && !group.contains(document.activeElement)) close(); });
+  group.addEventListener('focusout', event => { if (!group.contains(event.relatedTarget)) close(); });
   group.addEventListener('keydown', event => {
-    if (event.key === 'Escape') { event.stopPropagation(); closeSubmenus(); button.focus(); }
+    if (event.key === 'Escape') { event.stopPropagation(); button.focus(); close(); }
   });
 });
 closeSubmenus();
@@ -34,6 +39,13 @@ touchNavigation.addEventListener('change', closeSubmenus);
 document.addEventListener('click', event => { if (!event.target.closest('.nav-group')) closeSubmenus(); });
 
 if (menuButton && siteNav) {
+  // 錨點可能留在同一頁；點選後仍須收起主選單，讓目標內容露出。
+  siteNav.addEventListener('click', event => {
+    if (!event.target.closest('a[href]')) return;
+    siteNav.classList.remove('is-open');
+    menuButton.setAttribute('aria-expanded', 'false');
+    closeSubmenus();
+  });
   menuButton.addEventListener('click', () => {
     const isOpen = menuButton.getAttribute('aria-expanded') === 'true';
     menuButton.setAttribute('aria-expanded', String(!isOpen));

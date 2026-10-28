@@ -17,6 +17,14 @@ from image_pipeline import build_responsive_images
 
 
 class ContentTests(unittest.TestCase):
+    def test_current_exhibition_navigation_and_fallback(self):
+        with patch.object(build_site, "load_records", return_value=[{"slug": "current-show"}]), patch.object(build_site, "load_json") as load:
+            load.return_value = [{"slug": "current-show", "current": True}]
+            self.assertEqual(build_site.current_exhibition_url("../../"), "../../exhibitions/current-show/index.html")
+            for records in ([], [{"slug": "current-show", "current": False}], [{"slug": "missing", "current": True}]):
+                load.return_value = records
+                self.assertEqual(build_site.current_exhibition_url("../"), "../exhibitions/index.html")
+
     def test_chronology_format_roundtrip_validation_and_escaping(self):
         import chronology
         entries = [{"year": "2026", "events": ["<測試事件>", "第二件"]}, {"year": "2025", "events": []}]
