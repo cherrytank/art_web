@@ -149,6 +149,26 @@ class ResponsiveGuiTests(unittest.TestCase):
         self.wait_job()
         done.assert_called_once_with("ok")
 
+    def test_log_window_opens_during_work_and_records_failure(self):
+        gate = threading.Event()
+        self.app._run_job("Log 測試", lambda progress: gate.wait(2), Mock())
+        self.app.show_logs()
+        self.assertTrue(self.app.log_window.winfo_exists())
+        self.assertTrue(self.app.log_window.debug_control)
+        gate.set()
+        self.wait_job()
+        def fail(progress):
+            progress("測試進度")
+            raise ValueError("測試完整錯誤")
+        with patch.object(self.manager.messagebox, "showerror"):
+            self.app._run_job("失敗測試", fail, Mock())
+            self.wait_job()
+        text = self.manager.manager_log.tail()
+        self.assertIn("開始工作：失敗測試", text)
+        self.assertIn("測試進度", text)
+        self.assertIn("Traceback", text)
+        self.assertIn("ValueError: 測試完整錯誤", text)
+
     def test_preview_chooses_own_port_if_8000_is_occupied(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

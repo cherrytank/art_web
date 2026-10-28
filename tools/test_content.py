@@ -56,6 +56,9 @@ class ContentTests(unittest.TestCase):
             css = root / "static/css/styles.css"
             css.parent.mkdir(parents=True)
             css.write_text("p { font-size: 15px; }", encoding="utf-8")
+            script = root / "static/js/site.js"
+            script.parent.mkdir(parents=True)
+            script.write_text("// 測試", encoding="utf-8")
             with patch.object(build_site, "ROOT", root), patch.object(build_site, "DIST", root / "dist"):
                 def generate():
                     build_site.write_page("index.html", title="Test", description="Test", main="<h1>Test</h1>", root="", active="home", body_class="page-home")

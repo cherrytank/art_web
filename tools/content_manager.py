@@ -24,6 +24,10 @@ from page_images import PAGE_IMAGE_LABELS, import_page_image
 from content_format import EXAMPLES, blocks_to_markup, parse_markup
 from local_jobs import LocalJob
 import chronology
+import git_publish
+import manager_log
+from tkinter import Toplevel
+import time
 from project_paths import get_project_root
 
 
@@ -1124,17 +1128,20 @@ class PageImageForm(ScrollableForm):
         self.app._run_job("儲存圖片", write, complete)
 
 
-class MaintenancePanel(ttk.Frame):
+class MaintenancePanel(ScrollableForm):
     def __init__(self, parent: ttk.Notebook, app: "ContentManager") -> None:
-        super().__init__(parent, padding=34)
-        self.columnconfigure(0, weight=1)
-        ttk.Label(self, text="網站維護", style="FormTitle.TLabel").grid(row=0, column=0, sticky="w")
+        super().__init__(parent)
+        self.body.columnconfigure(0, weight=1)
+        ttk.Label(self.body, text="網站維護", style="FormTitle.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
-            self,
-            text="在這裡重新最佳化所有圖片、產生網站、預覽結果或打開資料夾。",
+            self.body,
+            text="編輯前先同步團隊內容；儲存後可提交並發布。其他檢查及維護工具如下。",
             style="Hint.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(6, 24))
         actions = [
+            ("檢查 Git 發布設定", app.check_git, "檢查這台電腦的專案、分支與遠端設定。"),
+            ("同步團隊最新內容", app.sync_git, "編輯前執行；只允許乾淨工作目錄與快轉更新，不覆蓋修改。"),
+            ("提交並發布到 GitHub", app.publish_git, "儲存後執行：檢查遠端、建置、提交網站檔案並推送 main。"),
             ("最佳化圖片並重建網站", app.rebuild, "重新產生各種圖片尺寸與所有 HTML。"),
             ("開啟網站預覽", app.open_preview, "在瀏覽器查看目前網站。"),
             ("打開作品資料夾", lambda: open_folder(ROOT / "content" / "works"), "查看作品 JSON 資料。"),
@@ -1145,11 +1152,11 @@ class MaintenancePanel(ttk.Frame):
             ("開啟使用說明", lambda: open_folder(ROOT / "README.md"), "閱讀完整操作方式。"),
         ]
         for row, (label, command, note) in enumerate(actions, start=2):
-            card = ttk.Frame(self, padding=(18, 14))
+            card = ttk.Frame(self.body, padding=(18, 14))
             card.grid(row=row, column=0, sticky="ew", pady=5)
             card.columnconfigure(0, weight=1)
             ttk.Label(card, text=label, style="CardTitle.TLabel").grid(row=0, column=0, sticky="w")
-            ttk.Label(card, text=note, style="Hint.TLabel").grid(row=1, column=0, sticky="w", pady=(3, 0))
+            ttk.Label(card, text=note, style="Hint.TLabel", wraplength=540).grid(row=1, column=0, sticky="w", pady=(3, 0))
             ttk.Button(card, text="執行", command=command).grid(row=0, column=1, rowspan=2, padx=(20, 0))
 
 
@@ -1278,8 +1285,16 @@ class ManagerWorkspace(ttk.Frame):
 
 
 class ContentManager(Tk):
+    def report_callback_exception(self, exc_type, exc_value, exc_traceback):
+        # 無主控台的 EXE 也必須顯示按鈕錯誤，並保存可供排查的紀錄。
+        manager_log.logger.error("介面操作失敗", exc_info=(exc_type, exc_value, exc_traceback))
+        messagebox.showerror("操作失敗", f"{exc_value}\n請按右上角「查看 Log」查看完整紀錄。")
+
     def __init__(self) -> None:
         super().__init__()
+        manager_log.configure(ROOT)
+        manager_log.logger.info("啟動管理器：專案=%s；Python=%s；EXE=%s", ROOT, sys.version.split()[0], getattr(sys, "frozen", False))
+        self.log_window = None
         self.title("沈東榮網站內容管理器")
         self.geometry("1120x820")
         self.minsize(1040, 680)
@@ -1292,6 +1307,9 @@ class ContentManager(Tk):
 
         header = ttk.Frame(self, padding=(28, 20, 28, 16), style="Header.TFrame")
         header.pack(fill="x")
+        log_button = ttk.Button(header, text="查看 Log", command=self.show_logs)
+        log_button.debug_control = True
+        log_button.pack(side="right", padx=(20, 0))
         ttk.Label(header, text="沈東榮網站內容管理器", style="AppTitle.TLabel").pack(anchor="w")
         ttk.Label(
             header,
@@ -1307,6 +1325,67 @@ class ContentManager(Tk):
         status_bar = ttk.Label(self, textvariable=self.status, style="Status.TLabel", anchor="w")
         status_bar.pack(fill="x", padx=18, pady=(0, 12))
         self.protocol("WM_DELETE_WINDOW", self.close)
+
+    def show_logs(self) -> None:
+        if self.log_window is not None and self.log_window.winfo_exists():
+            self.log_window.lift()
+            return
+        window = self.log_window = Toplevel(self)
+        window.debug_control = True
+        window.title("操作紀錄 / Debug Log")
+        window.geometry("950x600")
+        window.minsize(600, 350)
+        ttk.Label(window, text=f"紀錄檔：{manager_log.log_path}", wraplength=880, padding=12).pack(fill="x")
+        toolbar = ttk.Frame(window, padding=(12, 0, 12, 10))
+        toolbar.pack(fill="x")
+        frame = ttk.Frame(window)
+        frame.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+        output = Text(frame, wrap="none", font=("Consolas", 10), state="disabled")
+        vertical = ttk.Scrollbar(frame, orient="vertical", command=output.yview)
+        horizontal = ttk.Scrollbar(frame, orient="horizontal", command=output.xview)
+        output.configure(yscrollcommand=vertical.set, xscrollcommand=horizontal.set)
+        frame.rowconfigure(0, weight=1)
+        frame.columnconfigure(0, weight=1)
+        output.grid(row=0, column=0, sticky="nsew")
+        vertical.grid(row=0, column=1, sticky="ns")
+        horizontal.grid(row=1, column=0, sticky="ew")
+        previous = None
+
+        def refresh():
+            nonlocal previous
+            text = manager_log.tail()
+            if text != previous:
+                position = output.yview()
+                follow = previous is None or position[1] >= .99
+                output.configure(state="normal")
+                output.delete("1.0", "end")
+                output.insert("1.0", text)
+                output.configure(state="disabled")
+                output.see("end") if follow else output.yview_moveto(position[0])
+                previous = text
+
+        def copy():
+            self.clipboard_clear()
+            self.clipboard_append(output.get("1.0", "end-1c"))
+            self.status.set("已複製目前顯示的 Log；分享前請確認沒有私人資訊。")
+
+        ttk.Button(toolbar, text="重新整理", command=refresh).pack(side="left")
+        ttk.Button(toolbar, text="複製顯示內容", command=copy).pack(side="left", padx=8)
+        ttk.Button(toolbar, text="開啟紀錄檔", command=lambda: open_folder(manager_log.log_path)).pack(side="left")
+        ttk.Button(toolbar, text="開啟紀錄資料夾", command=lambda: open_folder(manager_log.log_path.parent)).pack(side="left", padx=8)
+        ttk.Label(toolbar, text="每秒自動更新", style="Hint.TLabel").pack(side="right")
+
+        def poll():
+            refresh()
+            window.log_timer = window.after(1000, poll)
+
+        def close():
+            window.after_cancel(window.log_timer)
+            window.destroy()
+            self.log_window = None
+
+        window.protocol("WM_DELETE_WINDOW", close)
+        poll()
 
     def _configure_style(self) -> None:
         default_font = font.nametofont("TkDefaultFont")
@@ -1330,6 +1409,32 @@ class ContentManager(Tk):
 
     def rebuild(self) -> None:
         self._run_job("更新網站", lambda progress: build_site.build(progress=progress), self._built)
+
+    def check_git(self) -> None:
+        self._run_job("檢查 Git", lambda progress: git_publish.inspect(ROOT),
+                      lambda result: messagebox.showinfo("Git 設定", result))
+
+    def sync_git(self) -> None:
+        if self.workspace.dirty_forms():
+            messagebox.showwarning("尚未儲存", "請先儲存或處理所有草稿，再同步團隊內容。")
+            return
+        if messagebox.askyesno("同步團隊內容", "下載 origin/main 的最新內容？同步後請重新開啟管理器。\n本機有未提交修改時將停止，不會自動覆寫。"):
+            self._run_job("同步團隊內容", lambda progress: git_publish.sync(ROOT, progress),
+                          lambda result: messagebox.showinfo("同步完成", result))
+
+    def publish_git(self) -> None:
+        if self.workspace.dirty_forms():
+            messagebox.showwarning("尚未儲存", "請先儲存所有頁面的草稿，再發布到 GitHub。")
+            return
+        def checked(result):
+            if not messagebox.askyesno("確認提交與推送", result + "\n\n將提交網站來源檔案，並推送 main 上所有尚未推送的提交。\n不包含原始 Word、PPT、EXE 或 dist。確認發布？"):
+                return
+            message = simpledialog.askstring("更新說明", "簡述這次網站更新：", initialvalue="更新網站內容", parent=self)
+            if not message or not message.strip():
+                return
+            self._run_job("發布網站", lambda progress: git_publish.publish(ROOT, message.strip(), progress, build_site.build),
+                          lambda result: messagebox.showinfo("已推送，等待部署", result))
+        self._run_job("檢查發布目標", lambda progress: git_publish.inspect(ROOT), checked)
 
     def _built(self, report) -> None:
         self.status.set(build_summary(report))
@@ -1369,7 +1474,10 @@ class ContentManager(Tk):
 
     def _run_job(self, label, work, complete) -> None:
         if self.busy:
+            manager_log.logger.warning("略過重複操作：%s（目前仍有工作執行中）", label)
             return
+        started = time.monotonic()
+        manager_log.logger.info("開始工作：%s", label)
         self.busy = True
         self.status.set(label + "…首次處理新圖片可能需要幾分鐘")
         self.progress.start(12)
@@ -1377,6 +1485,8 @@ class ContentManager(Tk):
 
         def disable(parent):
             for widget in parent.winfo_children():
+                if getattr(widget, "debug_control", False):
+                    continue
                 if isinstance(widget, (ttk.Button, ttk.Combobox, ttk.Checkbutton, ttk.Notebook)):
                     controls.append((widget, widget.state()))
                     widget.state(["disabled"])
@@ -1399,9 +1509,11 @@ class ContentManager(Tk):
                         if widget.winfo_exists():
                             widget.state(["!disabled", *states])
                     if event == "error":
+                        manager_log.logger.error("工作失敗：%s；耗時 %.2f 秒", label, time.monotonic() - started)
                         self.status.set("處理失敗；已儲存的資料仍保留，可修正後重試")
                         messagebox.showerror("處理失敗", value)
                     else:
+                        manager_log.logger.info("工作完成：%s；耗時 %.2f 秒", label, time.monotonic() - started)
                         complete(value)
                     return
             except Empty:
@@ -1417,6 +1529,7 @@ class ContentManager(Tk):
         if self.preview_server is not None:
             self.preview_server.shutdown()
             self.preview_server.server_close()
+        manager_log.logger.info("關閉管理器")
         self.destroy()
 
 

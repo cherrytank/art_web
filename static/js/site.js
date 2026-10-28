@@ -1,6 +1,28 @@
 const menuButton = document.querySelector('.menu-toggle');
 const siteNav = document.querySelector('.site-nav');
 
+// 桌面支援滑鼠移入；觸控與鍵盤使用同一個展開按鈕。
+const navGroups = [...document.querySelectorAll('.nav-group')];
+function closeSubmenus() {
+  navGroups.forEach(group => {
+    group.querySelector('.submenu-toggle').setAttribute('aria-expanded', 'false');
+    group.querySelector('.nav-submenu').hidden = true;
+  });
+}
+navGroups.forEach(group => {
+  const button = group.querySelector('.submenu-toggle');
+  const submenu = group.querySelector('.nav-submenu');
+  const open = () => { closeSubmenus(); button.setAttribute('aria-expanded', 'true'); submenu.hidden = false; };
+  button.addEventListener('click', () => { if (submenu.hidden) open(); else closeSubmenus(); });
+  group.addEventListener('pointerenter', event => { if (event.pointerType === 'mouse' && window.innerWidth > 1050) open(); });
+  group.addEventListener('pointerleave', event => { if (event.pointerType === 'mouse' && !group.contains(document.activeElement)) closeSubmenus(); });
+  group.addEventListener('focusout', event => { if (!group.contains(event.relatedTarget)) closeSubmenus(); });
+  group.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.stopPropagation(); closeSubmenus(); button.focus(); }
+  });
+});
+document.addEventListener('click', event => { if (!event.target.closest('.nav-group')) closeSubmenus(); });
+
 if (menuButton && siteNav) {
   menuButton.addEventListener('click', () => {
     const isOpen = menuButton.getAttribute('aria-expanded') === 'true';
@@ -58,6 +80,10 @@ articleFilters.forEach((button) => {
     });
   });
 });
+
+// 下拉選單連到指定分類，重新整理與分享網址時仍保留分類。
+const requestedCategory = new URLSearchParams(location.search).get('category');
+articleFilters.find(button => button.dataset.articleFilter === requestedCategory)?.click();
 
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
