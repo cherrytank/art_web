@@ -28,7 +28,7 @@
 python tools/build_exe.py
 ```
 
-也可以直接在管理器「預覽與維護 → 打包 EXE → 執行」。程式會在背景打包，進度及錯誤可從右上方「查看 Log」查看，另有 `.codex-work/logs/build-exe.log`。電腦需有 Python 3.10 以上版本及 Tk，首次安裝打包套件需要網路。完成後自動開啟 `release/build-日期時間-識別碼/`；先關閉舊管理器，再將其中的 `SiteContentManager.exe` 替換舊檔。每次獨立輸出可避免正在使用的 EXE 被占用而打包失敗，不會自動上傳或發布網站。
+也可以直接在管理器「預覽與維護 → 打包 EXE → 執行」。程式會在背景打包，進度及錯誤可從右上方「查看 Log」查看，另有 `.codex-work/logs/build-exe.log`。電腦需有 Python 3.10 以上版本及 Tk，首次安裝打包套件需要網路。完成後固定覆蓋 `release/SiteContentManager.exe`，不建立版本資料夾。若舊 EXE 正在使用，請在打包完成後 10 分鐘內關閉管理器，系統會自動替換；結果記錄於 `.codex-work/logs/replace-exe.log`。新檔在替換前暫存於 `.codex-work/package-output/`。不會自動上傳或發布網站。
 
 程式會自動建立專用 Python 環境、檢查 Tk 視窗元件、安裝打包套件，再產生 `release/SiteContentManager.exe`，不需要啟用虛擬環境或使用 BAT。首次安裝需要網路。若電腦使用 `py` 啟動 Python，指令開頭改成 `py` 即可。
 

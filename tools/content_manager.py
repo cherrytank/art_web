@@ -1544,9 +1544,12 @@ class ContentManager(Tk):
 
     def package_exe(self) -> None:
         def complete(path):
-            self.status.set(f"打包完成：{path}")
-            open_folder(path.parent)
-            messagebox.showinfo("打包完成", f"新版管理器：\n{path}\n\n請先關閉舊管理器，再用新版替換原本的 EXE。新檔也可傳給其他使用者。")
+            target = ROOT / "release" / "SiteContentManager.exe"
+            pending = path != target
+            note = "請在 10 分鐘內關閉舊管理器，系統會自動覆蓋同名 EXE。替換結果可查看 .codex-work/logs/replace-exe.log。" if pending else "已覆蓋原本的 EXE，下次開啟即為新版。新檔也可傳給其他使用者。"
+            self.status.set("打包完成，等待關閉舊管理器後替換" if pending else f"已更新：{target}")
+            open_folder(target.parent)
+            messagebox.showinfo("打包完成", f"固定輸出位置：\n{target}\n\n{note}")
         self._run_job("打包 EXE", lambda progress: manager_packaging.package_manager(ROOT, progress), complete)
 
     def rebuild(self) -> None:

@@ -566,7 +566,8 @@ def build_exhibitions(
     if not current_items:
         current_exhibitions = (
             '<article class="current-exhibition-card current-exhibition-empty">'
-            '<h3>目前無檔期</h3></article>'
+            '<div class="exhibition-empty-copy"><h3>目前無檔期</h3>'
+            '<p lang="en">No Current Exhibition</p></div></article>'
         )
     main = render(
         read_text(TEMPLATES / "exhibitions.html"),

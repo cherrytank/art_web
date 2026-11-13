@@ -1,11 +1,10 @@
 """管理器背景打包：使用外部 Python，避免 EXE 遞迴啟動或覆寫自身。"""
-from datetime import datetime
 from pathlib import Path
 import os
 import shutil
 import subprocess
 import sys
-import uuid
+from replace_manager import REPLACE_SCRIPT
 
 
 def start_process(command, **kwargs):
@@ -63,8 +62,8 @@ def package_manager(root: Path, progress) -> Path:
         raise ValueError("找不到 tools/build_exe.py，請先同步完整專案程式碼。")
     progress("尋找打包用 Python…")
     python = find_python(root)
-    # 每次獨立輸出，正在執行的 EXE 不會被覆寫。
-    output_dir = root / "release" / (datetime.now().strftime("build-%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6])
+    # 先完成打包再替換固定檔名，避免失敗時破壞原本可用的版本。
+    output_dir = root / ".codex-work" / "package-output"
     progress(f"打包輸出：{output_dir}")
     with start_process([*python, str(script), "--output-dir", str(output_dir)], **process_options(root)) as process:
         for line in process.stdout:
@@ -75,4 +74,18 @@ def package_manager(root: Path, progress) -> Path:
     result = output_dir / "SiteContentManager.exe"
     if not result.is_file():
         raise RuntimeError("打包程序已結束，但未找到新的 EXE，請查看 Log。")
-    return result
+    target = root / "release" / "SiteContentManager.exe"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        result.replace(target)
+    except PermissionError:
+        # Windows 使用中的 EXE 無法覆寫，交由獨立程序在關閉後替換。
+        log_path = root / ".codex-work" / "logs" / "replace-exe.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        options = process_options(root)
+        with log_path.open("w", encoding="utf-8") as log:
+            options.update(stdout=log, stderr=subprocess.STDOUT)
+            start_process([*python, "-c", REPLACE_SCRIPT, str(result), str(target)], **options)
+        progress("打包完成；請關閉舊管理器，系統將自動覆蓋 release/SiteContentManager.exe。")
+        return result
+    return target
