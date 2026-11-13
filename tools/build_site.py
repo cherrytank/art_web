@@ -564,7 +564,10 @@ def build_exhibitions(
         for item in current_items
     )
     if not current_items:
-        current_exhibitions = '<p class="empty-state">目前無檔期</p>'
+        current_exhibitions = (
+            '<article class="current-exhibition-card current-exhibition-empty">'
+            '<h3>目前無檔期</h3></article>'
+        )
     main = render(
         read_text(TEMPLATES / "exhibitions.html"),
         root="../",
