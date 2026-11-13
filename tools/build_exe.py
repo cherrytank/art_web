@@ -1,5 +1,6 @@
 """一個指令完成 Windows 打包：建立環境、安裝套件並產生 EXE。"""
 import os
+import argparse
 from pathlib import Path
 import subprocess
 import sys
@@ -18,6 +19,7 @@ def run_step(label: str, command: list[str], root: Path, log) -> None:
     with subprocess.Popen(
         command, cwd=root, env=env, stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     ) as process:
         for line in process.stdout:
             emit(line.rstrip("\r\n"))
@@ -26,7 +28,8 @@ def run_step(label: str, command: list[str], root: Path, log) -> None:
         raise RuntimeError(f"{label}失敗（結束碼 {code}），請查看上方訊息與打包 Log。")
 
 
-def build(root: Path, log) -> None:
+def build(root: Path, log, output_dir: Path | None = None) -> None:
+    output_dir = output_dir or root / "release"
     python = root / ".codex-work/exe-venv/Scripts/python.exe"
     if not python.is_file():
         run_step("建立專用 Python 環境", [sys.executable, "-m", "venv", str(python.parents[1])], root, log)
@@ -39,13 +42,13 @@ def build(root: Path, log) -> None:
     run_step("產生 EXE（請先關閉舊的內容管理器）", [
         str(python), "-m", "PyInstaller", "--noconfirm", "--clean",
         "--onefile", "--windowed", "--name", "SiteContentManager",
-        "--distpath", str(root / "release"),
+        "--distpath", str(output_dir),
         "--workpath", str(root / ".codex-work/pyinstaller-build"),
         "--specpath", str(root / ".codex-work"),
         "--paths", str(root / "tools"),
         str(root / "tools/manager_launcher.py"),
     ], root, log)
-    output = root / "release/SiteContentManager.exe"
+    output = output_dir / "SiteContentManager.exe"
     if not output.is_file():
         raise RuntimeError("打包程序結束，但找不到輸出的 EXE。")
     message = f"\n打包完成：{output}"
@@ -58,13 +61,16 @@ def main() -> int:
         print("請在 Windows 上建立 Windows EXE。", file=sys.stderr)
         return 1
     root = Path(__file__).resolve().parents[1]
+    parser = argparse.ArgumentParser(description="建立內容管理器 EXE")
+    parser.add_argument("--output-dir", type=Path, help="輸出資料夾；預設為專案 release")
+    args = parser.parse_args()
     log_path = root / ".codex-work/logs/build-exe.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     print(f"專案：{root}\n打包 Log：{log_path}", flush=True)
     with log_path.open("w", encoding="utf-8") as log:
         log.write(f"專案：{root}\n啟動 Python：{sys.executable}\n")
         try:
-            build(root, log)
+            build(root, log, args.output_dir.resolve() if args.output_dir else None)
         except (Exception, KeyboardInterrupt) as error:
             traceback.print_exc(file=log)
             print(f"\n打包未完成：{error}\n詳細紀錄：{log_path}", file=sys.stderr)

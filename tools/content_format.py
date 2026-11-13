@@ -10,7 +10,7 @@ import re
 
 
 PREFIXES = {"### ": "subheading", "## ": "heading", "> ": "quote", "! ": "lead", "- ": "list"}
-TYPES = {"paragraph", "heading", "subheading", "lead", "quote", "box", "list"}
+TYPES = {"paragraph", "heading", "subheading", "lead", "quote", "box", "list", "image"}
 EXAMPLES = {
     "大標": "## 請輸入段落大標",
     "小標": "### 請輸入段落小標",
@@ -29,7 +29,12 @@ def normalize_blocks(value: list) -> list[dict[str, str]]:
         kind = block.get("type", "paragraph")
         if kind not in TYPES or not isinstance(block.get("text"), str):
             raise ValueError(f"不支援的文字區塊：{kind}")
-        blocks.append({"type": kind, "text": block["text"]})
+        normalized = {"type": kind, "text": block["text"]}
+        if kind == "image":
+            if not isinstance(block.get("src"), str) or not block["src"].strip():
+                raise ValueError("圖片區塊缺少圖片路徑。")
+            normalized["src"] = block["src"]
+        blocks.append(normalized)
     return blocks
 
 
@@ -71,6 +76,12 @@ def parse_markup(source: str) -> list[dict[str, str]]:
                 kind = "paragraph"
             lines.append(line[1:])
             continue
+        image = re.fullmatch(r"!\[([^\]\n]*)\]\((.+)\)", line)
+        if image:
+            flush()
+            blocks.append({"type": "image", "text": image[1], "src": image[2]})
+            kind = "paragraph"
+            continue
         marker = next((prefix for prefix in PREFIXES if line.startswith(prefix)), None)
         if marker:
             new_kind = PREFIXES[marker]
@@ -94,7 +105,9 @@ def blocks_to_markup(value: list) -> str:
     output = []
     for block in normalize_blocks(value):
         kind, text = block["type"], block["text"]
-        if kind == "box":
+        if kind == "image":
+            output.append(f'![{text}]({block["src"]})')
+        elif kind == "box":
             body = "\n".join("\\" + line if line == ":::" or line.startswith("\\") else line for line in text.split("\n"))
             output.append(f"::: box\n{body}\n:::")
         elif kind in inverse:
@@ -109,10 +122,15 @@ def inline_text(text: str) -> str:
     return re.sub(r"\*\*([^*\n]+)\*\*", r"<strong>\1</strong>", html.escape(text, quote=True))
 
 
-def render_blocks(value: list) -> str:
+def render_blocks(value: list, image_renderer=None) -> str:
     output = []
     for block in normalize_blocks(value):
         kind, text = block["type"], inline_text(block["text"])
+        if kind == "image":
+            if image_renderer is None:
+                raise ValueError("圖片區塊需要網站圖片產生器。")
+            output.append(image_renderer(block["src"], block["text"]))
+            continue
         if not text.strip():
             continue
         if kind == "list":
@@ -127,4 +145,4 @@ def render_blocks(value: list) -> str:
 
 
 def plain_summary(value: list) -> str:
-    return next((re.sub(r"\*\*([^*\n]+)\*\*", r"\1", block["text"]) for block in normalize_blocks(value) if block["text"].strip()), "")
+    return next((re.sub(r"\*\*([^*\n]+)\*\*", r"\1", block["text"]) for block in normalize_blocks(value) if block["type"] != "image" and block["text"].strip()), "")

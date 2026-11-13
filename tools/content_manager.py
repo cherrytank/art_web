@@ -26,6 +26,8 @@ from local_jobs import LocalJob
 import chronology
 import git_publish
 import manager_log
+import manager_packaging
+from content_operations import delete_record, import_inline_images
 from tkinter import Toplevel
 import time
 from project_paths import get_project_root
@@ -217,6 +219,43 @@ class FormFields:
                 row=index // 4, column=index % 4, padx=(0, 5), pady=3)
         ttk.Button(group, text="格式教學", command=lambda: webbrowser.open(
             (ROOT / "docs" / "文字編輯教學.html").as_uri())).grid(row=1, column=3, padx=(0, 5), pady=3)
+        def insert_images():
+            paths = filedialog.askopenfilenames(title="在游標位置插入圖片（可複選）", filetypes=[("圖片", "*.jpg *.jpeg *.png *.webp *.avif")])
+            if paths:
+                widget.insert("insert", "\n\n" + "\n\n".join(f"![圖片說明]({path})" for path in paths) + "\n\n")
+                widget.focus_set()
+                widget.see("insert")
+        ttk.Button(group, text="插入圖片…", command=insert_images).grid(row=2, column=0, columnspan=2, sticky="w", pady=3)
+
+    def gallery(self, label: str, value: list[str]) -> Text:
+        """一行一張圖片，可複選附加、刪除游標所在行及調整順序。"""
+        widget = self.text(label, height=5, hint="一行一張；使用下方按鈕管理圖片。儲存後自動匯入，移除不會刪掉原圖。")
+        widget.insert("1.0", "\n".join(value))
+        bar = ttk.Frame(self.parent)
+        bar.grid(row=self.row, column=1, columnspan=2, sticky="w", pady=(0, 12))
+        self.row += 1
+        def add():
+            paths = filedialog.askopenfilenames(title="新增多張圖片", filetypes=[("圖片", "*.jpg *.jpeg *.png *.webp *.avif")])
+            if paths:
+                existing = widget.get("1.0", "end-1c").strip()
+                widget.delete("1.0", "end")
+                widget.insert("1.0", "\n".join(dict.fromkeys([*existing.splitlines(), *paths])).strip())
+        def change(direction):
+            lines = widget.get("1.0", "end-1c").splitlines()
+            index = int(widget.index("insert").split(".")[0]) - 1
+            if not 0 <= index < len(lines): return
+            if direction == 0:
+                lines.pop(index)
+            elif 0 <= index + direction < len(lines):
+                lines[index], lines[index + direction] = lines[index + direction], lines[index]
+                index += direction
+            widget.delete("1.0", "end")
+            widget.insert("1.0", "\n".join(lines))
+            widget.mark_set("insert", f"{min(index + 1, max(1, len(lines)))}.0")
+            widget.focus_set()
+        for label, command in [("新增多張…", add), ("移除這張", lambda: change(0)), ("上移", lambda: change(-1)), ("下移", lambda: change(1))]:
+            ttk.Button(bar, text=label, command=command).pack(side="left", padx=(0, 5))
+        return widget
 
     def actions(self, save_command: object, preview_command: object) -> None:
         group = self.form.action_bar
@@ -552,7 +591,8 @@ class ExhibitionForm(ScrollableForm):
         summaries = json.loads(summary_path.read_text(encoding="utf-8"))
         self.current_choice_keys.clear()
         selected_label = ""
-        labels: list[str] = []
+        labels: list[str] = ["目前無檔期"]
+        self.current_choice_keys["目前無檔期"] = "none"
         for index, item in enumerate(summaries):
             base_label = f'{item.get("year", "")}｜{item.get("title", "")}｜{item.get("venue", "")}'
             label = f"{base_label}（目前）" if item.get("current") else base_label
@@ -575,7 +615,7 @@ class ExhibitionForm(ScrollableForm):
 
         summary_path = ROOT / "content" / "exhibitions.json"
         summaries = json.loads(summary_path.read_text(encoding="utf-8"))
-        selected_title = ""
+        selected_title = "目前無檔期" if selected_key == "none" else ""
         for item in summaries:
             item.pop("current", None)
             if exhibition_key(item) == selected_key:
@@ -585,6 +625,9 @@ class ExhibitionForm(ScrollableForm):
             messagebox.showerror("設定失敗", "找不到所選展覽，請重新開啟管理介面後再試一次。")
             return
 
+        backup = ROOT / ".codex-work/content-backups" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        backup.mkdir(parents=True)
+        shutil.copy2(summary_path, backup / summary_path.name)
         summary_path.write_text(
             json.dumps(summaries, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
@@ -627,6 +670,7 @@ class ArticleForm(ScrollableForm):
         fields.entry("日期", self.values["date"], required=True, hint="格式：YYYY-MM-DD；出版品只知道年份時可填 YYYY。")
         fields.combobox("文章分類", self.values["category"], list(CATEGORY_LABELS))
         fields.image_picker("文章主圖", self.values["image"])
+        self.gallery_text = fields.gallery("附加圖片（依順序顯示於正文後）", [])
         fields.entry("圖片說明", self.values["image_alt"], hint="可留白自動使用文章標題。")
         fields.entry("文章摘要", self.values["summary"], required=True)
         self.body_text = fields.text(
@@ -680,11 +724,12 @@ class ArticleForm(ScrollableForm):
             "image_alt": self.values["image_alt"].get().strip() or f"文章〈{title}〉主圖",
             "summary": summary,
             "body": body,
+            "gallery": [line.strip() for line in self.gallery_text.get("1.0", "end-1c").splitlines() if line.strip()],
         }
         def complete():
             self.reset()
             self.app.finish_save(f"文章〈{title}〉")
-        import_record(self.app, "articles", record, ("image",), complete)
+        import_record(self.app, "articles", record, ("image", "gallery"), complete)
 
     def reset(self) -> None:
         for variable in self.values.values():
@@ -692,6 +737,7 @@ class ArticleForm(ScrollableForm):
         self.values["date"].set(date.today().isoformat())
         self.values["category"].set(self.default_category)
         self.body_text.delete("1.0", "end")
+        self.gallery_text.delete("1.0", "end")
         self.title_lines.delete("1.0", "end")
         self.canvas.yview_moveto(0)
 
@@ -780,7 +826,9 @@ class PageTextForm(ScrollableForm):
         for keys, label, mode in specs:
             value = self.get_value(keys)
             text = self.field_text(value, mode)
-            if self.page and mode in {"text", "image", "category"}:
+            if mode == "gallery":
+                widget = fields.gallery(label, value)
+            elif self.page and mode in {"text", "image", "category"}:
                 variable = StringVar(value=text)
                 widget = fields.combobox("分類", variable, list(CATEGORY_LABELS)) if mode == "category" else fields.entry(label, variable)
                 widget.input_variable = variable  # Keep the Tk variable alive with its field.
@@ -804,7 +852,11 @@ class PageTextForm(ScrollableForm):
         if self.page == "chronology":
             ttk.Button(self.body, text="新增年份…", command=self.add_chronology_year).grid(row=fields.row, column=1, sticky="w", pady=12)
             fields.row += 1
+            ttk.Button(self.body, text="刪除年份…", command=self.delete_chronology_year).grid(row=fields.row, column=1, sticky="w", pady=6)
+            fields.row += 1
         fields.actions(self.save, self.app.open_preview)
+        if self.data.get("kind") in {"work", "article", "exhibition"}:
+            ttk.Button(self.action_bar, text="刪除此項目…", command=self.delete_selected).pack(side="right", padx=8)
         self.canvas.yview_moveto(0)
 
     def field_specs(self) -> list[tuple]:
@@ -871,7 +923,46 @@ class PageTextForm(ScrollableForm):
                                ("poster_image", "展覽海報", "image"), ("poster_alt", "海報說明", "text")],
             }[self.data["kind"]]
             specs.extend(((key,), label, mode) for key, label, mode in image_fields)
+        if self.data.get("kind") in {"article", "work", "exhibition"}:
+            self.data.setdefault("gallery", [])
+            label = "作品細部圖片" if self.data["kind"] == "work" else "附加圖片（依順序顯示）"
+            specs.append((("gallery",), label, "gallery"))
         return specs
+
+    def delete_selected(self) -> None:
+        if not messagebox.askyesno("刪除內容", f"確定刪除「{self.loaded_choice}」？\n不建立備份，尚未儲存的修改會捨棄，原始圖片會保留。\n網站重新發布後才會從線上移除。"):
+            return
+        path, original = self.path, self.original
+        def work(progress):
+            progress("刪除內容並移除引用…")
+            return delete_record(ROOT, path, original)
+        def complete(_result):
+            self.refresh_documents()
+            self.choice.set(next(iter(self.documents), ""))
+            self.load_page()
+            manager_log.logger.info("已刪除內容（不建立備份）：%s", path)
+            self.app.finish_save("刪除內容")
+        self.app._run_job("刪除內容", work, complete)
+
+    def delete_chronology_year(self) -> None:
+        year = simpledialog.askinteger("刪除年份", "輸入要刪除的年份（會同時移除該年所有事件）：", parent=self, minvalue=1000, maxvalue=9999)
+        if year is None: return
+        if not any(str(item["year"]) == str(year) for item in self.data["entries"]):
+            messagebox.showinfo("找不到年份", "請輸入已有的年份。")
+            return
+        if not messagebox.askyesno("刪除年份", f"刪除 {year} 年及其事件？按儲存變更後才會生效。"):
+            return
+        self.collect_chronology_fields()
+        self.data["entries"] = [item for item in self.data["entries"] if str(item["year"]) != str(year)]
+        self.load_page(reload=False)
+
+    def collect_chronology_fields(self) -> None:
+        """調整年份前保留其他尚未儲存的欄位。"""
+        for keys, widget, mode in self.widgets:
+            target = self.data
+            for key in keys[:-1]: target = target[key]
+            raw = self.input_text(widget)
+            target[keys[-1]] = [line.strip() for line in raw.splitlines() if line.strip()] if mode == "lines" else raw
 
     def add_chronology_year(self) -> None:
         year = simpledialog.askinteger("新增年份", "輸入四位數年份（儲存後自動由新到舊排列）：", parent=self, minvalue=1000, maxvalue=9999)
@@ -903,7 +994,7 @@ class PageTextForm(ScrollableForm):
             return add_content.CATEGORIES[value][0]
         if mode == "formatted":
             return blocks_to_markup(value)
-        return "\n".join(value) if mode == "lines" else str(value)
+        return "\n".join(value) if mode in {"lines", "gallery"} else str(value)
 
     def get_value(self, keys: tuple):
         value = self.data
@@ -964,7 +1055,7 @@ class PageTextForm(ScrollableForm):
                     messagebox.showerror("文字格式錯誤", str(error))
                     return
                 continue
-            target[keys[-1]] = [line.strip() for line in raw.splitlines() if line.strip()] if mode == "lines" else raw
+            target[keys[-1]] = [line.strip() for line in raw.splitlines() if line.strip()] if mode in {"lines", "gallery"} else raw
         if updated.get("kind") == "work" and not updated["title_zh"]:
             messagebox.showerror("資料格式錯誤", "作品中文名不能空白。")
             return
@@ -994,11 +1085,24 @@ class PageTextForm(ScrollableForm):
                     target = target[key]
                 if target[keys[-1]]:
                     target[keys[-1]] = import_page_image(target[keys[-1]], ROOT / "static/assets/images")
+            if "gallery" in updated and updated["gallery"] != self.data.get("gallery", []):
+                updated["gallery"] = [import_page_image(value, ROOT / "static/assets/images") for value in updated["gallery"]]
+            for keys, _, mode in self.widgets:
+                if mode != "formatted": continue
+                target = updated
+                for key in keys: target = target[key]
+                if target != self.get_value(keys):
+                    import_inline_images(target, ROOT / "static/assets/images")
             if path.read_text(encoding="utf-8") != original:
                 raise ValueError("檔案已被其他程式修改，請重新載入。")
             backup = ROOT / ".codex-work" / "content-backups" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-            backup.mkdir(parents=True)
-            shutil.copy2(path, backup / path.name)
+            # 刪除大事記年份同樣不建立備份；一般編輯仍沿用原本儲存流程。
+            deleted_years = (path.name == "chronology.json" and
+                {str(item["year"]) for item in json.loads(original)["entries"]} -
+                {str(item["year"]) for item in updated["entries"]})
+            if not deleted_years:
+                backup.mkdir(parents=True)
+                shutil.copy2(path, backup / path.name)
             path.write_text(json.dumps(updated, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             if updated.get("kind") == "exhibition":
                 summary_path = ROOT / "content/exhibitions.json"
@@ -1144,6 +1248,7 @@ class MaintenancePanel(ScrollableForm):
             ("提交並發布到 GitHub", app.publish_git, "儲存後執行：檢查遠端、建置、提交網站檔案並推送 main。"),
             ("最佳化圖片並重建網站", app.rebuild, "重新產生各種圖片尺寸與所有 HTML。"),
             ("開啟網站預覽", app.open_preview, "在瀏覽器查看目前網站。"),
+            ("打包 EXE", app.package_exe, "背景打包新版管理器，需要本機 Python；完成後開啟輸出資料夾，可從「查看 Log」檢查進度。"),
             ("打開作品資料夾", lambda: open_folder(ROOT / "content" / "works"), "查看作品 JSON 資料。"),
             ("打開展覽資料夾", lambda: open_folder(ROOT / "content" / "exhibition_details"), "查看展覽詳細頁 JSON 資料。"),
             ("打開文章資料夾", lambda: open_folder(ROOT / "content" / "articles"), "查看文章 JSON 資料。"),
@@ -1407,6 +1512,13 @@ class ContentManager(Tk):
         style.configure("Primary.TButton", background="#3a342e", foreground="#ffffff", padding=(16, 9))
         style.map("Primary.TButton", background=[("active", "#1f1c19")])
 
+    def package_exe(self) -> None:
+        def complete(path):
+            self.status.set(f"打包完成：{path}")
+            open_folder(path.parent)
+            messagebox.showinfo("打包完成", f"新版管理器：\n{path}\n\n請先關閉舊管理器，再用新版替換原本的 EXE。新檔也可傳給其他使用者。")
+        self._run_job("打包 EXE", lambda progress: manager_packaging.package_manager(ROOT, progress), complete)
+
     def rebuild(self) -> None:
         self._run_job("更新網站", lambda progress: build_site.build(progress=progress), self._built)
 
@@ -1579,6 +1691,7 @@ def import_record(app, folder: str, record: dict, image_fields: tuple, complete,
 
     def work(progress):
         updated = json.loads(json.dumps(record, ensure_ascii=False))
+        import_inline_images(updated, ROOT / "static/assets/images")
         for key in image_fields:
             values = updated[key] if isinstance(updated[key], list) else [updated[key]]
             names = []

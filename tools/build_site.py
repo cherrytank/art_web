@@ -68,11 +68,12 @@ def collection_label(work: dict[str, Any]) -> str:
 
 
 def sort_works(works: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Catalog numbers ascend numerically; unnumbered records come last."""
+    """年份由新到舊，同年編號由大到小，無編號排在同年最後。"""
     def key(work: dict[str, Any]) -> tuple:
         number = str(work.get("catalog_number") or "").strip()
-        return (not number.isdecimal(), int(number) if number.isdecimal() else 0,
-                str(work.get("year", "")), number, str(work.get("slug", "")))
+        year = str(work.get("year", ""))
+        return (-(int(year) if year.isdecimal() else 0), not number.isdecimal(),
+                -int(number) if number.isdecimal() else 0, str(work.get("slug", "")))
     return sorted(works, key=key)
 
 
@@ -464,7 +465,7 @@ def build_works(site: dict[str, Any], works: list[dict[str, Any]]) -> None:
         if work.get("collection"):
             collection_row = '<div><dt>典藏</dt><dd>已收藏</dd></div>'
         descriptions = work.get("description", [])
-        description = render_blocks(descriptions)
+        description = render_article_blocks(descriptions)
         title_en_line = (
             f'<p class="detail-title-en">{escape(work["title_en"])}</p>'
             if work.get("title_en")
@@ -562,6 +563,8 @@ def build_exhibitions(
         current_exhibition_card(item, "../", detail_slugs)
         for item in current_items
     )
+    if not current_items:
+        current_exhibitions = '<p class="empty-state">目前無檔期</p>'
     main = render(
         read_text(TEMPLATES / "exhibitions.html"),
         root="../",
@@ -609,7 +612,7 @@ def build_exhibitions(
             + "</figure>"
             for photo_index, filename in enumerate(detail_data.get("gallery", []), start=1)
         )
-        introduction = render_blocks(detail_data.get("introduction", []))
+        introduction = render_article_blocks(detail_data.get("introduction", []))
         previous_item = details[index - 1] if index > 0 else None
         next_item = details[index + 1] if index + 1 < len(details) else None
         detail = render(
@@ -667,7 +670,7 @@ def publication_html(data: dict) -> str:
     return ('<section class="exhibition-publication page-section"><div class="section-heading">'
             '<p class="section-kicker">Publication</p><h2>出版作品</h2></div>'
             f'<h3>{escape(data["title"])}</h3>{picture}'
-            f'<div class="formatted-content">{render_blocks(data.get("description", []))}</div></section>')
+            f'<div class="formatted-content">{render_article_blocks(data.get("description", []))}</div></section>')
 
 
 def build_classes(site: dict[str, Any]) -> None:
@@ -739,7 +742,16 @@ def article_row(article: dict[str, Any], root: str) -> str:
 
 
 def render_article_blocks(blocks: list[dict[str, str]]) -> str:
-    return render_blocks(blocks)
+    return render_blocks(blocks, image_renderer=inline_content_image)
+
+
+def inline_content_image(filename: str, caption: str) -> str:
+    """只接受已匯入的圖片檔名，並沿用響應式圖片與點擊放大。"""
+    if not filename or Path(filename).name != filename or any(char in filename for char in ("/", "\\", ":")):
+        raise ValueError("內文圖片須先由管理器匯入，不能使用外部網址或檔案路徑。")
+    picture = responsive_image(filename, caption or "內容圖片", "../../", DETAIL_IMAGE_SIZES, lightbox=True)
+    label = f"<figcaption>{escape(caption)}</figcaption>" if caption else ""
+    return f'<figure class="content-image">{picture}{label}</figure>'
 
 
 def build_writings(site: dict[str, Any], articles: list[dict[str, Any]]) -> None:
@@ -788,7 +800,7 @@ def build_writings(site: dict[str, Any], articles: list[dict[str, Any]]) -> None
                 priority=True,
                 lightbox=True,
             ),
-            body=render_article_blocks(article["body"]),
+            body=render_article_blocks(article["body"]) + "".join(inline_content_image(name, "") for name in article.get("gallery", [])),
         )
         write_page(
             f"writings/{article['slug']}/index.html",

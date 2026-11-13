@@ -24,6 +24,7 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="不顯示視窗的啟動檢查")
     parser.add_argument("--check-build", action="store_true", help="檢查所有入口並建置指定專案")
     parser.add_argument("--check-git", action="store_true", help="只讀檢查 EXE 能否呼叫本機 Git")
+    parser.add_argument("--check-package", action="store_true", help="檢查管理器並實際打包到新的輸出資料夾")
     parser.add_argument("--report", type=Path, help="將檢查結果寫入 JSON")
     args = parser.parse_args()
     app = None
@@ -44,7 +45,7 @@ def main() -> int:
         from content_manager import ContentManager, PAGE_SECTIONS
         app = ContentManager()
         app.title(f"沈東榮網站內容管理器 — {get_project_root()}")
-        if args.check or args.check_build or args.check_git:
+        if args.check or args.check_build or args.check_git or args.check_package:
             app.withdraw()
             for page, _label in PAGE_SECTIONS:
                 app.workspace.show_page(page)
@@ -52,6 +53,9 @@ def main() -> int:
                     app.workspace.show_task(task)
             app.update_idletasks()
             result = {"ok": True, "project": str(get_project_root()), "forms": len(app.workspace.forms)}
+            if args.check_package:
+                from manager_packaging import package_manager
+                result["package"] = str(package_manager(get_project_root(), print))
             if args.check_git:
                 import git_publish
                 result["git"] = git_publish.inspect(get_project_root())

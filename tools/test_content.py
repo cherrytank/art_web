@@ -49,6 +49,7 @@ class ContentTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 build_site.date_display(invalid)
         article = build_site.load_json(build_site.CONTENT / "articles/heaven-earth-2021.json")
+        article.update(category="publications", category_zh="出版品", category_en="Publications")
         with patch.object(build_site, "responsive_image", return_value="<img>"), patch.object(build_site, "write_page") as write:
             build_site.build_writings({"name_zh": "沈東榮"}, [article])
         index = write.call_args_list[0].kwargs["main"]
@@ -93,7 +94,7 @@ class ContentTests(unittest.TestCase):
             self.assertEqual(first, generate("原始內容"))
             self.assertNotEqual(first, generate("修改內容"))
 
-    def test_work_numbers_are_numeric_ascending_before_year(self):
+    def test_work_years_and_numbers_are_newest_first(self):
         works = [
             {"slug": "small", "catalog_number": "9", "year": "2026"},
             {"slug": "large", "catalog_number": "10", "year": "2025"},
@@ -102,7 +103,7 @@ class ContentTests(unittest.TestCase):
             {"slug": "missing", "year": "2028"},
         ]
         self.assertEqual([work["slug"] for work in build_site.sort_works(works)],
-                         ["small", "large", "newest", "empty", "missing"])
+                         ["missing", "empty", "newest", "small", "large"])
         self.assertEqual(works[0]["slug"], "small")
 
     def test_every_page_slot_uses_configured_image_and_options(self):
@@ -137,6 +138,65 @@ class ContentTests(unittest.TestCase):
 
 
 class EditorTests(unittest.TestCase):
+    def test_new_publication_imports_gallery_and_inline_images(self):
+        picture = self.make_image(self.root / "incoming-book", "green")
+        detail = self.make_image(self.root / "incoming-book-detail", "blue")
+        form = self.manager.ArticleForm(self.manager.ttk.Notebook(self.window), self.app, default_category="出版品")
+        for key, value in {"slug":"test-book", "title":"測試畫冊", "image":str(picture), "summary":"畫冊摘要"}.items():
+            form.values[key].set(value)
+        form.gallery_text.insert("1.0", f"{picture}\n{detail}")
+        form.body_text.insert("1.0", f"第一段\n\n![內頁]({detail})\n\n第二段")
+        with patch.object(self.manager.messagebox, "showerror") as error: form.save()
+        error.assert_not_called()
+        data = json.loads((self.root / "content/articles/test-book.json").read_text(encoding="utf-8"))
+        self.assertEqual(data["category"], "publications")
+        self.assertEqual(len(data["gallery"]), 2)
+        self.assertEqual(data["body"][1]["src"], data["gallery"][1])
+        with patch.object(build_site, "responsive_image", return_value="<img>"), patch.object(build_site, "write_page") as write:
+            build_site.build_writings({"name_zh":"測試"}, [data])
+        self.assertEqual(write.call_args.kwargs["main"].count('class="content-image"'), 3)
+
+    def test_existing_gallery_and_inline_images_save_and_remove(self):
+        body = self.select_record("works")
+        picture = self.make_image(self.root / "incoming-details", "blue")
+        gallery = next(widget for _, widget, mode in self.panel.widgets if mode == "gallery")
+        gallery.delete("1.0", "end")
+        gallery.insert("1.0", str(picture))
+        body.delete("1.0", "end")
+        body.insert("1.0", f"第一段\n\n![細部]({picture})\n\n第二段")
+        with patch.object(self.manager.messagebox, "askyesno", return_value=True), patch.object(self.manager.messagebox, "showerror") as error:
+            self.panel.save()
+        error.assert_not_called()
+        saved = json.loads(self.panel.original)
+        self.assertEqual(saved["gallery"][0], saved["description"][1]["src"])
+        self.assertTrue((self.root / "static/assets/images" / saved["gallery"][0]).exists())
+        gallery = next(widget for _, widget, mode in self.panel.widgets if mode == "gallery")
+        gallery.delete("1.0", "end")
+        with patch.object(self.manager.messagebox, "askyesno", return_value=True): self.panel.save()
+        self.assertEqual(json.loads(self.panel.original)["gallery"], [])
+
+    def test_current_exhibition_can_be_empty(self):
+        form = self.manager.ExhibitionForm(self.manager.ttk.Notebook(self.window), self.app, mode="current")
+        form.current_selection.set("目前無檔期")
+        form.set_current_exhibition()
+        summaries = json.loads((self.root / "content/exhibitions.json").read_text(encoding="utf-8"))
+        self.assertFalse(any(item.get("current") for item in summaries))
+        self.assertEqual(form.current_selection.get(), "目前無檔期")
+
+    def test_delete_last_publication_and_chronology_year(self):
+        panel = self.manager.PageTextForm(self.manager.ttk.Notebook(self.window), self.app, "publications")
+        path = panel.path
+        with patch.object(self.manager.messagebox, "askyesno", return_value=True): panel.delete_selected()
+        self.assertFalse(path.exists())
+        self.assertIsNone(panel.path)
+        years = self.manager.PageTextForm(self.manager.ttk.Notebook(self.window), self.app, "chronology")
+        year = int(years.data["entries"][0]["year"])
+        with patch.object(self.manager.simpledialog, "askinteger", return_value=year), patch.object(self.manager.messagebox, "askyesno", return_value=True):
+            years.delete_chronology_year()
+            years.save()
+        self.assertFalse(any(str(item["year"]) == str(year) for item in json.loads(years.original)["entries"]))
+        self.assertFalse((self.root / ".codex-work/content-backups").exists())
+
     def setUp(self):
         import tkinter
         import content_manager
@@ -151,6 +211,11 @@ class EditorTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         shutil.copytree(build_site.CONTENT, self.root / "content")
+        # 固定測試分類，避免真實文案調整改變測試前提。
+        publication_path = self.root / "content/articles/heaven-earth-2021.json"
+        publication = json.loads(publication_path.read_text(encoding="utf-8"))
+        publication.update(category="publications", category_zh="出版品", category_en="Publications")
+        publication_path.write_text(json.dumps(publication), encoding="utf-8")
         self.root_patch = patch.object(content_manager, "ROOT", self.root)
         self.root_patch.start()
         self.addCleanup(self.root_patch.stop)
@@ -239,32 +304,33 @@ class EditorTests(unittest.TestCase):
         panel = self.manager.PageTextForm(self.manager.ttk.Notebook(self.window), self.app, "chronology")
         event = next(widget for keys, widget, _ in panel.widgets if keys == ("entries", 0, "events"))
         event.insert("end", "\n尚未儲存的事件")
-        with patch.object(self.manager.simpledialog, "askinteger", return_value=2026):
+        with patch.object(self.manager.simpledialog, "askinteger", return_value=2099):
             panel.add_chronology_year()
         self.assertTrue(panel.has_changes())
-        self.assertEqual(panel.data["entries"][0]["year"], "2026")
+        self.assertEqual(panel.data["entries"][0]["year"], "2099")
         self.assertIn("尚未儲存的事件", panel.data["entries"][1]["events"])
         event = next(widget for keys, widget, _ in panel.widgets if keys == ("entries", 0, "events"))
         event.insert("1.0", "新的展覽\n新的創作")
         with patch.object(self.manager.messagebox, "askyesno", return_value=True):
             panel.save()
         saved = json.loads(panel.original)
-        self.assertEqual(saved["entries"][0], {"year": "2026", "events": ["新的展覽", "新的創作"]})
+        self.assertEqual(saved["entries"][0], {"year": "2099", "events": ["新的展覽", "新的創作"]})
         self.assertFalse(panel.has_changes())
-        with patch.object(self.manager.simpledialog, "askinteger", return_value=2026), patch.object(self.manager.messagebox, "showinfo") as info:
+        with patch.object(self.manager.simpledialog, "askinteger", return_value=2099), patch.object(self.manager.messagebox, "showinfo") as info:
             panel.add_chronology_year()
         info.assert_called_once()
 
     def test_chronology_can_add_year_and_save_without_json(self):
         self.panel.choice.set("年表．大事記")
         self.panel.load_page()
+        original_count = len(self.panel.data["entries"])
         widget = next(widget for _, widget, mode in self.panel.widgets if mode == "chronology")
-        widget.insert("1.0", "2026\n新增藝術活動\n\n")
+        widget.insert("1.0", "2099\n新增藝術活動\n\n")
         with patch.object(self.manager.messagebox, "askyesno", return_value=True):
             self.panel.save()
         data = json.loads(self.panel.original)
-        self.assertEqual(data["entries"][0], {"year": "2026", "events": ["新增藝術活動"]})
-        self.assertEqual(len(data["entries"]), 26)
+        self.assertEqual(data["entries"][0], {"year": "2099", "events": ["新增藝術活動"]})
+        self.assertEqual(len(data["entries"]), original_count + 1)
         self.assertFalse(self.panel.has_changes())
 
     def test_existing_article_can_change_to_publication_category(self):
