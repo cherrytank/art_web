@@ -237,6 +237,31 @@ class EditorTests(unittest.TestCase):
             self.assertFalse(self.panel.has_changes(), choice)
             self.assertTrue(self.panel.widgets, choice)
 
+    def test_discard_current_draft_preserves_other_pages_and_files(self):
+        self.app.busy = False
+        workspace = self.manager.ManagerWorkspace(self.window, self.app)
+        home = workspace.forms[("home", "edit")]
+        original = home.path.read_bytes()
+        widget = home.widgets[0][1]
+        widget.insert("end", "草稿")
+        self.assertTrue(home.has_changes())
+        workspace.show_page("works")
+        workspace.show_task("new")
+        new = workspace.forms[("works", "new")]
+        new.values["title_zh"].set("未儲存作品")
+        with patch.object(self.manager.messagebox, "askyesno", return_value=False):
+            workspace.discard_changes()
+        self.assertEqual(new.values["title_zh"].get(), "未儲存作品")
+        with patch.object(self.manager.messagebox, "askyesno", return_value=True):
+            workspace.discard_changes()
+        self.assertNotIn(("works", "new"), workspace.dirty_forms())
+        self.assertTrue(home.has_changes())
+        workspace.show_page("home")
+        with patch.object(self.manager.messagebox, "askyesno", return_value=True):
+            workspace.discard_changes()
+        self.assertFalse(home.has_changes())
+        self.assertEqual(home.path.read_bytes(), original)
+
     def test_publication_editor_saves_title_year_body_cover_and_backup(self):
         panel = self.manager.PageTextForm(self.manager.ttk.Notebook(self.window), self.app, "publications")
         self.assertEqual(len(panel.documents), 1)

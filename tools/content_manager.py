@@ -1339,6 +1339,8 @@ class ManagerWorkspace(ttk.Frame):
             button = ttk.Button(self.toolbar, text=label, command=lambda task=task: self.show_task(task))
             button.pack(side="left", padx=(0, 8))
             self.task_buttons[task] = button
+        if page != "maintenance":
+            ttk.Button(self.toolbar, text="放棄這次修改", command=self.discard_changes).pack(side="right")
         self.show_task(self.last_tasks.get(page, tasks[0][0]))
 
     def show_task(self, task):
@@ -1373,6 +1375,34 @@ class ManagerWorkspace(ttk.Frame):
         self.last_tasks[self.page] = task
         for name, button in self.task_buttons.items():
             button.state(["pressed"] if name == task else ["!pressed"])
+
+    def discard_changes(self):
+        """只還原目前工作區的草稿，不變更已儲存檔案與其他頁面。"""
+        if self.app.busy or self.active_key is None:
+            return
+        key = self.active_key
+        if key[1] == "maintenance":
+            return
+        if not messagebox.askyesno(
+            "放棄這次修改",
+            "確定放棄目前編輯區尚未儲存的修改？\n"
+            "既有內容會重新讀取已儲存版本；新增表單會清空並恢復預設值。\n"
+            "其他頁面的草稿與已儲存的內容不受影響。",
+            parent=self,
+        ):
+            return
+        form = self.forms[key]
+        if key[1] in {"edit", "images"}:
+            # 保留目前編輯項目，並從本機重新載入文字、圖片與大事記。
+            form.load_page()
+            self.baselines[key] = form_snapshot(form)
+        else:
+            # 新增表單與當期選擇器重新建立，恢復預設值或已儲存設定。
+            form.destroy()
+            del self.forms[key]
+            self.baselines.pop(key, None)
+            self.show_task(key[1])
+        self.app.status.set("已放棄目前編輯區的未儲存修改")
 
     def dirty_forms(self):
         dirty = []
