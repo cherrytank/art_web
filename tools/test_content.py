@@ -94,7 +94,7 @@ class ContentTests(unittest.TestCase):
             self.assertEqual(first, generate("原始內容"))
             self.assertNotEqual(first, generate("修改內容"))
 
-    def test_work_years_and_numbers_are_newest_first(self):
+    def test_work_years_descending_and_numbers_ascending(self):
         works = [
             {"slug": "small", "catalog_number": "9", "year": "2026"},
             {"slug": "large", "catalog_number": "10", "year": "2025"},
@@ -103,8 +103,29 @@ class ContentTests(unittest.TestCase):
             {"slug": "missing", "year": "2028"},
         ]
         self.assertEqual([work["slug"] for work in build_site.sort_works(works)],
-                         ["missing", "empty", "newest", "small", "large"])
+                         ["missing", "empty", "small", "newest", "large"])
         self.assertEqual(works[0]["slug"], "small")
+
+    def test_catalog_order_with_year_filter_and_leading_zero(self):
+        works = [
+            {"slug": "last-26", "year": "2026", "catalog_number": "026026"},
+            {"slug": "second-25", "year": "2025", "catalog_number": "025002"},
+            {"slug": "second-27", "year": "2027", "catalog_number": "27002"},
+            {"slug": "first-26", "year": "2026", "catalog_number": "026001"},
+            {"slug": "first-25", "year": "2025", "catalog_number": "025001"},
+            {"slug": "first-27", "year": "2027", "catalog_number": "27001"},
+            {"slug": "second-26", "year": "2026", "catalog_number": "026002"},
+            {"slug": "missing-26", "year": "2026"},
+        ]
+        ordered = build_site.sort_works(works)
+        self.assertEqual([item["slug"] for item in ordered], [
+            "first-27", "second-27", "first-26", "second-26", "last-26",
+            "missing-26", "first-25", "second-25",
+        ])
+        self.assertEqual([item["catalog_number"] for item in ordered
+                          if item["year"] == "2025"], ["025001", "025002"])
+        self.assertEqual([item.get("catalog_number") for item in ordered
+                          if item["year"] == "2026"], ["026001", "026002", "026026", None])
 
     def test_every_page_slot_uses_configured_image_and_options(self):
         for slot in PAGE_IMAGE_LABELS:

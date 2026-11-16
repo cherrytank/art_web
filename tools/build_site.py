@@ -68,12 +68,12 @@ def collection_label(work: dict[str, Any]) -> str:
 
 
 def sort_works(works: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """年份由新到舊，同年編號由大到小，無編號排在同年最後。"""
+    """年份由新到舊，同年編號依數值由小到大，無編號排在同年最後。"""
     def key(work: dict[str, Any]) -> tuple:
         number = str(work.get("catalog_number") or "").strip()
         year = str(work.get("year", ""))
         return (-(int(year) if year.isdecimal() else 0), not number.isdecimal(),
-                -int(number) if number.isdecimal() else 0, str(work.get("slug", "")))
+                int(number) if number.isdecimal() else 0, str(work.get("slug", "")))
     return sorted(works, key=key)
 
 
