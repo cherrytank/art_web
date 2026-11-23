@@ -14,7 +14,7 @@ from datetime import date, datetime
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from tkinter import BooleanVar, StringVar, Text, Tk, filedialog, font, messagebox, simpledialog
+from tkinter import BooleanVar, Listbox, StringVar, Text, Tk, filedialog, font, messagebox, simpledialog
 from tkinter import ttk
 
 import add_content
@@ -792,6 +792,16 @@ class PageTextForm(ScrollableForm):
                 if relative == previous_path:
                     self.choice.set(choice)
                     self.loaded_choice = choice
+        if self.page == "exhibitions":
+            for index, item in enumerate(build_site.load_json(ROOT / "content/exhibitions.json")):
+                if item.get("slug") and (ROOT / "content/exhibition_details" / f"{item['slug']}.json").is_file():
+                    continue
+                label = f"歷年展覽：{item['year']} {item['title']}（第 {index + 1} 筆）"
+                relative = f"history/{index}"
+                self.documents[label] = relative
+                if relative == previous_path:
+                    self.choice.set(label)
+                    self.loaded_choice = label
         if hasattr(self, "selector") and self.selector.winfo_exists():
             self.selector.configure(values=list(self.documents))
 
@@ -808,10 +818,14 @@ class PageTextForm(ScrollableForm):
             return
         if self.choice.get() not in self.documents:
             self.choice.set(next(iter(self.documents)))
-        self.path = ROOT / "content" / self.documents[self.choice.get()]
+        relative = self.documents[self.choice.get()]
+        self.history_index = int(relative.split("/")[1]) if relative.startswith("history/") else None
+        self.path = ROOT / "content" / ("exhibitions.json" if self.history_index is not None else relative)
         if reload:
             self.original = self.path.read_text(encoding="utf-8")
             self.data = json.loads(self.original)
+            if self.history_index is not None:
+                self.data = self.data[self.history_index]
         fields = FormFields(self)
         fields.heading("編輯內容", "選擇項目後修改。文字與主圖一起儲存；原檔會自動備份。")
         if len(self.documents) > 1 or self.page == "publications":
@@ -826,7 +840,23 @@ class PageTextForm(ScrollableForm):
         for keys, label, mode in specs:
             value = self.get_value(keys)
             text = self.field_text(value, mode)
-            if mode == "gallery":
+            if mode == "works":
+                ttk.Label(self.body, text=label).grid(row=fields.row, column=0, sticky="nw")
+                frame = ttk.Frame(self.body)
+                frame.grid(row=fields.row, column=1, sticky="ew")
+                widget = Listbox(frame, selectmode="multiple", exportselection=False, height=9)
+                scroll = ttk.Scrollbar(frame, command=widget.yview)
+                widget.configure(yscrollcommand=scroll.set)
+                scroll.pack(side="right", fill="y")
+                widget.pack(fill="x", expand=True)
+                records = build_site.sort_works([build_site.load_json(p) for p in (ROOT / "content/works").glob("*.json")])
+                widget.slugs = [item["slug"] for item in records]
+                for index, item in enumerate(records):
+                    widget.insert("end", f"{item.get('catalog_number', '')}　{item['title_zh']}")
+                    if item["slug"] in value:
+                        widget.selection_set(index)
+                fields.row += 1
+            elif mode == "gallery":
                 widget = fields.gallery(label, value)
             elif self.page and mode in {"text", "image", "category"}:
                 variable = StringVar(value=text)
@@ -861,6 +891,9 @@ class PageTextForm(ScrollableForm):
 
     def field_specs(self) -> list[tuple]:
         name = self.path.name
+        if name == "exhibitions.json":
+            return [((key,), label, "text") for key, label in
+                    [("year", "年份"), ("title", "展覽名稱"), ("venue", "場地"), ("city", "城市")]]
         groups = {
             "site.json": [("home_intro", "首頁中文簡介"), ("home_intro_en", "首頁英文簡介"), ("portrait_caption", "首頁照片中文說明")],
             "about.json": [("intro_zh", "學經歷中文簡介"), ("intro_en", "學經歷英文簡介"), ("philosophy_intro_zh", "創作理念中文簡介"), ("philosophy_intro_en", "創作理念英文簡介"), ("philosophy", "創作理念全文")],
@@ -908,6 +941,8 @@ class PageTextForm(ScrollableForm):
                 ("subtitle", "展覽類型"), ("artist", "藝術家"), ("date", "展期"),
                 ("venue", "展覽地點"), ("city", "城市"), ("address", "地址"), ("opening_hours", "開放時間")]]
             specs.append((("introduction",), "展覽介紹", "formatted"))
+            self.data.setdefault("selected_work_slugs", [])
+            specs.append((("selected_work_slugs",), "展出作品（點選加入／取消）", "works"))
             publication = self.data.setdefault("publication", {})
             for key, default in [("title", ""), ("image", ""), ("alt", ""), ("description", [])]:
                 publication.setdefault(key, default)
@@ -926,6 +961,8 @@ class PageTextForm(ScrollableForm):
         if self.data.get("kind") in {"article", "work", "exhibition"}:
             self.data.setdefault("gallery", [])
             label = "作品細部圖片" if self.data["kind"] == "work" else "附加圖片（依順序顯示）"
+            if self.data["kind"] == "exhibition":
+                label = "展出空間（選取圖片所在行後可上移、下移）"
             specs.append((("gallery",), label, "gallery"))
         return specs
 
@@ -984,10 +1021,14 @@ class PageTextForm(ScrollableForm):
 
     @staticmethod
     def input_text(widget) -> str:
+        if isinstance(widget, Listbox):
+            return "\n".join(sorted(widget.slugs[i] for i in widget.curselection()))
         return widget.get("1.0", "end-1c") if isinstance(widget, Text) else widget.get()
 
     @staticmethod
     def field_text(value, mode: str) -> str:
+        if mode == "works":
+            return "\n".join(sorted(value))
         if mode == "chronology":
             return chronology.to_text(value)
         if mode == "category":
@@ -1055,7 +1096,7 @@ class PageTextForm(ScrollableForm):
                     messagebox.showerror("文字格式錯誤", str(error))
                     return
                 continue
-            target[keys[-1]] = [line.strip() for line in raw.splitlines() if line.strip()] if mode in {"lines", "gallery"} else raw
+            target[keys[-1]] = [line.strip() for line in raw.splitlines() if line.strip()] if mode in {"lines", "gallery", "works"} else raw
         if updated.get("kind") == "work" and not updated["title_zh"]:
             messagebox.showerror("資料格式錯誤", "作品中文名不能空白。")
             return
@@ -1083,7 +1124,7 @@ class PageTextForm(ScrollableForm):
                 target = updated
                 for key in keys[:-1]:
                     target = target[key]
-                if target[keys[-1]]:
+                if target[keys[-1]] and target[keys[-1]] != self.get_value(keys):
                     target[keys[-1]] = import_page_image(target[keys[-1]], ROOT / "static/assets/images")
             if "gallery" in updated and updated["gallery"] != self.data.get("gallery", []):
                 updated["gallery"] = [import_page_image(value, ROOT / "static/assets/images") for value in updated["gallery"]]
@@ -1103,7 +1144,11 @@ class PageTextForm(ScrollableForm):
             if not deleted_years:
                 backup.mkdir(parents=True)
                 shutil.copy2(path, backup / path.name)
-            path.write_text(json.dumps(updated, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            output = updated
+            if self.history_index is not None:
+                output = json.loads(original)
+                output[self.history_index] = updated
+            path.write_text(json.dumps(output, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             if updated.get("kind") == "exhibition":
                 summary_path = ROOT / "content/exhibitions.json"
                 summaries = build_site.load_json(summary_path)

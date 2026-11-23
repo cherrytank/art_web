@@ -326,6 +326,30 @@ class EditorTests(unittest.TestCase):
         panel.load_page()
         self.assertEqual(panel.data["category"], "publications")
 
+    def test_reopen_historical_exhibition_and_add_exhibited_work(self):
+        panel = self.manager.PageTextForm(self.window, self.app, "exhibitions")
+        history = next(label for label, ref in panel.documents.items() if ref.startswith("history/"))
+        panel.choice.set(history)
+        panel.load_page()
+        summaries = json.loads(panel.original)
+        i = panel.history_index
+        title = next(widget for keys, widget, _ in panel.widgets if keys == ("title",))
+        title.input_variable.set("修改後的展覽")
+        with patch.object(self.manager.messagebox, "askyesno", return_value=True):
+            panel.save()
+        summaries[i]["title"] = "修改後的展覽"
+        self.assertEqual(json.loads(panel.original), summaries)
+        panel.choice.set(next(label for label, ref in panel.documents.items() if ref.startswith("exhibition_details/")))
+        panel.load_page()
+        picker = next(widget for _, widget, mode in panel.widgets if mode == "works")
+        old = set(panel.data["selected_work_slugs"])
+        new = next(i for i, slug in enumerate(picker.slugs) if slug not in old)
+        expected = old | {picker.slugs[new]}
+        picker.selection_set(new)
+        with patch.object(self.manager.messagebox, "askyesno", return_value=True):
+            panel.save()
+        self.assertEqual(set(panel.data["selected_work_slugs"]), expected)
+
     def test_page_scopes_only_list_related_content_and_images(self):
         for page in ["home", "about", "chronology", "works", "exhibitions", "classes", "writings", "contact"]:
             with self.subTest(page=page):
@@ -334,7 +358,8 @@ class EditorTests(unittest.TestCase):
                 folder = {"works": "works", "exhibitions": "exhibition_details", "writings": "articles"}.get(page)
                 for path in panel.documents.values():
                     if "/" in path:
-                        self.assertEqual(path.split("/")[0], folder)
+                        allowed = {folder, "history"} if page == "exhibitions" else {folder}
+                        self.assertIn(path.split("/")[0], allowed)
                 if folder:
                     self.assertEqual(list(panel.documents.values()).count("page_copy.json"), 1)
                     self.assertTrue(all(keys[0].startswith(page + "_") for keys, _, _ in panel.widgets))

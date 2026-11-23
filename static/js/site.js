@@ -224,7 +224,13 @@ function closeLightbox() {
   if (lightboxDialog?.open) lightboxDialog.close();
 }
 
+let lightboxGroup = [];
 function openLightbox(trigger) {
+  const group = trigger.closest('.exhibition-photo-grid, .exhibition-works-grid, [data-gallery]');
+  lightboxGroup = group ? [...group.querySelectorAll('img[data-lightbox-src]')] : [trigger];
+  lightboxDialog?.querySelectorAll('[data-step]').forEach(button => {
+    button.hidden = lightboxGroup.length < 2;
+  });
   if (!lightboxDialog || !lightboxMedia || !lightboxCaption) return;
   activeLightboxTrigger = trigger;
   const enlargedImage = document.createElement('img');
@@ -236,9 +242,38 @@ function openLightbox(trigger) {
   lightboxMedia.replaceChildren(enlargedImage);
   lightboxCaption.textContent = trigger.alt || '';
   document.body.classList.add('lightbox-open');
-  lightboxDialog.showModal();
-  lightboxClose?.focus();
+  if (!lightboxDialog.open) {
+    lightboxDialog.showModal();
+    lightboxClose?.focus();
+  }
 }
+
+function stepLightbox(direction) {
+  if (lightboxGroup.length < 2) return;
+  const index = lightboxGroup.indexOf(activeLightboxTrigger);
+  openLightbox(lightboxGroup[(index + direction + lightboxGroup.length) % lightboxGroup.length]);
+}
+lightboxDialog?.querySelectorAll('[data-step]').forEach(button => {
+  button.addEventListener('click', () => stepLightbox(Number(button.dataset.step)));
+});
+lightboxDialog?.addEventListener('keydown', event => {
+  if (event.key === 'ArrowRight') stepLightbox(1);
+  if (event.key === 'ArrowLeft') stepLightbox(-1);
+});
+let swipeStart;
+lightboxMedia?.addEventListener('touchstart', event => {
+  swipeStart = event.touches.length === 1 ? event.touches[0] : null;
+}, { passive: true });
+lightboxMedia?.addEventListener('touchend', event => {
+  if (!swipeStart || lightboxGroup.length < 2) return;
+  const dx = event.changedTouches[0].clientX - swipeStart.clientX;
+  const dy = event.changedTouches[0].clientY - swipeStart.clientY;
+  swipeStart = null;
+  if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) {
+    event.preventDefault();
+    stepLightbox(dx < 0 ? 1 : -1);
+  }
+}, { passive: false });
 
 document.querySelectorAll('img[data-lightbox-src]').forEach((image) => {
   image.addEventListener('click', () => openLightbox(image));

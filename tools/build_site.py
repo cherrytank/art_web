@@ -351,7 +351,7 @@ def build_chronology(site: dict[str, Any]) -> None:
                active="about", body_class="page-about page-chronology")
 
 
-def work_card(work: dict[str, Any], root: str) -> str:
+def work_card(work: dict[str, Any], root: str, *, enlarge: bool = False) -> str:
     search = " ".join(
         str(work.get(key, ""))
         for key in (
@@ -373,10 +373,14 @@ def work_card(work: dict[str, Any], root: str) -> str:
         if work.get("collection")
         else ""
     )
+    detail_link = f'{root}works/{escape(work["slug"])}/index.html'
+    image = responsive_image(work["image"], work["alt"], root, CARD_IMAGE_SIZES, lightbox=enlarge)
+    image_start = "" if enlarge else f'<a href="{detail_link}">'
+    title_start = f'<a href="{detail_link}">' if enlarge else ""
     return (
         f'<article id="{escape(work["slug"])}" class="work-card" data-year="{escape(work["year"])}" '
-        f'data-search="{escape(search)}"><a href="{root}works/{escape(work["slug"])}/index.html">'
-        f'<div class="work-image">{responsive_image(work["image"], work["alt"], root, CARD_IMAGE_SIZES)}</div>'
+        f'data-search="{escape(search)}">{image_start}'
+        f'<div class="work-image">{image}</div>{title_start}'
         '<div class="work-meta"><div class="work-primary">'
         f'<h2><span class="work-number">{escape(work.get("catalog_number", ""))}</span>'
         f'<span class="work-title">{escape(work["title_zh"])}</span></h2>'
@@ -602,7 +606,7 @@ def build_exhibitions(
             if slug not in work_by_slug:
                 raise ValueError(f"展覽引用了不存在的作品：{slug}")
             selected_records.append(work_by_slug[slug])
-        selected_works = [work_card(work, "../../") for work in sort_works(selected_records)]
+        selected_works = [work_card(work, "../../", enlarge=True) for work in sort_works(selected_records)]
 
         gallery = "".join(
             '<figure>'
