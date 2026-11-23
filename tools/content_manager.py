@@ -1482,6 +1482,10 @@ class ManagerWorkspace(ttk.Frame):
             self.baselines[self.active_key] = form_snapshot(self.forms[self.active_key])
 
 
+MANAGER_VERSION = "2026.11.23.1"
+MANAGER_TITLE = f"沈東榮網站內容管理器 v{MANAGER_VERSION}"
+
+
 class ContentManager(Tk):
     def report_callback_exception(self, exc_type, exc_value, exc_traceback):
         # 無主控台的 EXE 也必須顯示按鈕錯誤，並保存可供排查的紀錄。
@@ -1491,9 +1495,9 @@ class ContentManager(Tk):
     def __init__(self) -> None:
         super().__init__()
         manager_log.configure(ROOT)
-        manager_log.logger.info("啟動管理器：專案=%s；Python=%s；EXE=%s", ROOT, sys.version.split()[0], getattr(sys, "frozen", False))
+        manager_log.logger.info("啟動管理器 v%s：專案=%s；Python=%s；EXE=%s", MANAGER_VERSION, ROOT, sys.version.split()[0], getattr(sys, "frozen", False))
         self.log_window = None
-        self.title("沈東榮網站內容管理器")
+        self.title(f"{MANAGER_TITLE} — {ROOT}")
         self.geometry("1120x820")
         self.minsize(1040, 680)
         self.configure(background="#eee8df")
@@ -1508,7 +1512,7 @@ class ContentManager(Tk):
         log_button = ttk.Button(header, text="查看 Log", command=self.show_logs)
         log_button.debug_control = True
         log_button.pack(side="right", padx=(20, 0))
-        ttk.Label(header, text="沈東榮網站內容管理器", style="AppTitle.TLabel").pack(anchor="w")
+        ttk.Label(header, text=MANAGER_TITLE, style="AppTitle.TLabel").pack(anchor="w")
         ttk.Label(
             header,
             text="左側選頁面 → 選擇工作 → 編輯 → 儲存變更｜切換頁面會保留草稿",

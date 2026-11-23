@@ -42,9 +42,8 @@ def main() -> int:
                 if not selected:
                     return 0
                 configure_project(Path(selected))
-        from content_manager import ContentManager, PAGE_SECTIONS
+        from content_manager import ContentManager, PAGE_SECTIONS, MANAGER_VERSION
         app = ContentManager()
-        app.title(f"沈東榮網站內容管理器 — {get_project_root()}")
         if args.check or args.check_build or args.check_git or args.check_package:
             app.withdraw()
             for page, _label in PAGE_SECTIONS:
@@ -52,7 +51,7 @@ def main() -> int:
                 for task in list(app.workspace.task_buttons):
                     app.workspace.show_task(task)
             app.update_idletasks()
-            result = {"ok": True, "project": str(get_project_root()), "forms": len(app.workspace.forms)}
+            result = {"ok": True, "version": MANAGER_VERSION, "project": str(get_project_root()), "forms": len(app.workspace.forms)}
             if args.check_package:
                 from manager_packaging import package_manager
                 result["package"] = str(package_manager(get_project_root(), print))
