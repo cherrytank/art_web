@@ -1,5 +1,6 @@
 """內容管理器的圖片匯入與刪除作業。"""
 import json
+from tempfile import NamedTemporaryFile
 from pathlib import Path
 
 from page_images import import_page_image
@@ -47,3 +48,21 @@ def delete_record(root: Path, path: Path, original: str) -> None:
         for source, data in originals.items():
             source.write_bytes(data)
         raise
+
+def update_history(path: Path, original: str, index: int, detail=None) -> None:
+    """原位更新或刪除單筆歷年展覽，保留同名展覽與當期標記。"""
+    items = json.loads(original)
+    if detail is None:
+        del items[index]
+    else:
+        items[index].update(slug=detail["slug"], title=detail["title_zh"],
+                            year=detail["year"], city=detail["city"], venue=detail["venue"])
+    with NamedTemporaryFile(dir=path.parent, delete=False) as temp:
+        pending = Path(temp.name)
+    try:
+        pending.write_text(json.dumps(items, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        if path.read_text(encoding="utf-8") != original:
+            raise ValueError("展覽列表已更新，請重新載入。")
+        pending.replace(path)
+    finally:
+        pending.unlink(missing_ok=True)

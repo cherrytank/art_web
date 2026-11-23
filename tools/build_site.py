@@ -643,14 +643,14 @@ def build_exhibitions(
                 "(max-width: 760px) 100vw, 64vw",
                 priority=True,
                 lightbox=True,
-            ),
+            ) if detail_data.get("cover_image") else "",
             poster_image=responsive_image(
                 detail_data["poster_image"],
                 detail_data["poster_alt"],
                 "../../",
                 "(max-width: 760px) 100vw, 28vw",
                 lightbox=True,
-            ),
+            ) if detail_data.get("poster_image") else "",
             introduction=introduction,
             gallery=gallery,
             selected_works="".join(selected_works),
@@ -666,7 +666,7 @@ def build_exhibitions(
             root="../../",
             active="exhibitions",
             body_class="page-exhibition-detail",
-            social_image=detail_data["cover_image"],
+            social_image=detail_data.get("cover_image") or detail_data.get("poster_image") or "og.png",
         )
 
 

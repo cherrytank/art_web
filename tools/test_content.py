@@ -333,14 +333,14 @@ class EditorTests(unittest.TestCase):
         panel.load_page()
         summaries = json.loads(panel.original)
         i = panel.history_index
-        title = next(widget for keys, widget, _ in panel.widgets if keys == ("title",))
+        title = next(widget for keys, widget, _ in panel.widgets if keys == ("title_zh",))
         title.input_variable.set("修改後的展覽")
         with patch.object(self.manager.messagebox, "askyesno", return_value=True):
             panel.save()
         summaries[i]["title"] = "修改後的展覽"
-        self.assertEqual(json.loads(panel.original), summaries)
-        panel.choice.set(next(label for label, ref in panel.documents.items() if ref.startswith("exhibition_details/")))
-        panel.load_page()
+        summaries[i]["slug"] = panel.data["slug"]
+        self.assertEqual(json.loads((self.root / "content/exhibitions.json").read_text(encoding="utf-8")), summaries)
+        self.assertIsNone(panel.history_index)
         picker = next(widget for _, widget, mode in panel.widgets if mode == "works")
         old = set(panel.data["selected_work_slugs"])
         new = next(i for i, slug in enumerate(picker.slugs) if slug not in old)
@@ -349,6 +349,17 @@ class EditorTests(unittest.TestCase):
         with patch.object(self.manager.messagebox, "askyesno", return_value=True):
             panel.save()
         self.assertEqual(set(panel.data["selected_work_slugs"]), expected)
+
+    def test_delete_only_selected_history_row(self):
+        panel = self.manager.PageTextForm(self.window, self.app, "exhibitions")
+        panel.choice.set(next(label for label, ref in panel.documents.items() if ref.startswith("history/")))
+        panel.load_page()
+        path = panel.path
+        expected = json.loads(panel.original)
+        del expected[panel.history_index]
+        with patch.object(self.manager.messagebox, "askyesno", return_value=True):
+            panel.delete_selected()
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8")), expected)
 
     def test_page_scopes_only_list_related_content_and_images(self):
         for page in ["home", "about", "chronology", "works", "exhibitions", "classes", "writings", "contact"]:

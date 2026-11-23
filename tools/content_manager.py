@@ -9,6 +9,7 @@ import shutil
 import sys
 import threading
 import webbrowser
+from uuid import uuid4
 from queue import Empty
 from datetime import date, datetime
 from functools import partial
@@ -27,7 +28,7 @@ import chronology
 import git_publish
 import manager_log
 import manager_packaging
-from content_operations import delete_record, import_inline_images
+from content_operations import delete_record, import_inline_images, update_history
 from tkinter import Toplevel
 import time
 from project_paths import get_project_root
@@ -825,7 +826,12 @@ class PageTextForm(ScrollableForm):
             self.original = self.path.read_text(encoding="utf-8")
             self.data = json.loads(self.original)
             if self.history_index is not None:
-                self.data = self.data[self.history_index]
+                item = self.data[self.history_index]
+                self.data = dict.fromkeys(("title_en", "subtitle", "artist", "date", "address",
+                                           "opening_hours", "cover_image", "poster_image"), "")
+                self.data.update(kind="exhibition", slug=f"exhibition-{uuid4().hex[:12]}",
+                                 title_zh=item["title"], year=item["year"], venue=item["venue"], city=item["city"],
+                                 cover_alt=item["title"], poster_alt=item["title"], introduction=[])
         fields = FormFields(self)
         fields.heading("編輯內容", "選擇項目後修改。文字與主圖一起儲存；原檔會自動備份。")
         if len(self.documents) > 1 or self.page == "publications":
@@ -891,9 +897,6 @@ class PageTextForm(ScrollableForm):
 
     def field_specs(self) -> list[tuple]:
         name = self.path.name
-        if name == "exhibitions.json":
-            return [((key,), label, "text") for key, label in
-                    [("year", "年份"), ("title", "展覽名稱"), ("venue", "場地"), ("city", "城市")]]
         groups = {
             "site.json": [("home_intro", "首頁中文簡介"), ("home_intro_en", "首頁英文簡介"), ("portrait_caption", "首頁照片中文說明")],
             "about.json": [("intro_zh", "學經歷中文簡介"), ("intro_en", "學經歷英文簡介"), ("philosophy_intro_zh", "創作理念中文簡介"), ("philosophy_intro_en", "創作理念英文簡介"), ("philosophy", "創作理念全文")],
@@ -972,6 +975,8 @@ class PageTextForm(ScrollableForm):
         path, original = self.path, self.original
         def work(progress):
             progress("刪除內容並移除引用…")
+            if self.history_index is not None:
+                return update_history(path, original, self.history_index)
             return delete_record(ROOT, path, original)
         def complete(_result):
             self.refresh_documents()
@@ -1144,11 +1149,20 @@ class PageTextForm(ScrollableForm):
             if not deleted_years:
                 backup.mkdir(parents=True)
                 shutil.copy2(path, backup / path.name)
-            output = updated
+            payload = json.dumps(updated, ensure_ascii=False, indent=2) + "\n"
             if self.history_index is not None:
-                output = json.loads(original)
-                output[self.history_index] = updated
-            path.write_text(json.dumps(output, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                detail = path.parent / "exhibition_details" / f"{updated['slug']}.json"
+                detail.parent.mkdir(exist_ok=True)
+                stream = detail.open("x", encoding="utf-8")
+                try:
+                    with stream:
+                        stream.write(payload)
+                    update_history(path, original, self.history_index, updated)
+                except Exception:
+                    detail.unlink(missing_ok=True)
+                    raise
+                return
+            path.write_text(payload, encoding="utf-8")
             if updated.get("kind") == "exhibition":
                 summary_path = ROOT / "content/exhibitions.json"
                 summaries = build_site.load_json(summary_path)
@@ -1159,6 +1173,10 @@ class PageTextForm(ScrollableForm):
                 summary_path.write_text(json.dumps(summaries, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
         def complete(_result):
+            if self.history_index is not None:
+                self.refresh_documents()
+                relative = f"exhibition_details/{updated['slug']}.json"
+                self.choice.set(next(label for label, ref in self.documents.items() if ref == relative))
             self.load_page()
             self.app.finish_save("網頁文字")
         self.app._run_job("儲存修改", write, complete)
